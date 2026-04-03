@@ -5,6 +5,9 @@ import dotenv from 'dotenv';
 
 import User from './models/users';
 import Chat from './models/chats';
+import Message from './models/Message';
+import Post from './models/Post';
+import Job from './models/Job';
 
 dotenv.config();
 
