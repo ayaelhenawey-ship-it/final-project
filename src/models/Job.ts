@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
-// 1. تعريف الأنواع (Interface)
+
 export interface IJob extends Document {
   publisherId: mongoose.Types.ObjectId;
   title: string;
@@ -19,7 +19,7 @@ export interface IJob extends Document {
   updatedAt: Date;
 }
 
-// 2. إنشاء الـ Schema
+
 const JobSchema: Schema = new Schema({
   publisherId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   title: { type: String, required: true },

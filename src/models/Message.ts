@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
-// 1. تعريف الأنواع (Interface)
+
 export interface IMessage extends Document {
   chatId: mongoose.Types.ObjectId;
   senderId: mongoose.Types.ObjectId;
@@ -17,7 +17,6 @@ export interface IMessage extends Document {
   updatedAt: Date;
 }
 
-// 2. إنشاء الـ Schema
 const MessageSchema: Schema = new Schema({
   chatId: { type: Schema.Types.ObjectId, ref: 'Chat', required: true },
   senderId: { type: Schema.Types.ObjectId, ref: 'User', required: true },

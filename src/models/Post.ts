@@ -1,6 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
-// 1. تعريف الأنواع (Interface)
 export interface IPost extends Document {
   authorId: mongoose.Types.ObjectId;
   content: string;
@@ -18,7 +17,7 @@ export interface IPost extends Document {
   updatedAt: Date;
 }
 
-// 2. إنشاء الـ Schema
+
 const PostSchema: Schema = new Schema({
   authorId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   content: { type: String, required: true },
