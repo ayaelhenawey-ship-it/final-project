@@ -3,22 +3,36 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
 
-import User from './models/users';
-import Chat from './models/chats';
+import User from './models/user';
+import Chat from './models/chat';
 import Message from './models/Message';
 import Post from './models/Post';
 import Job from './models/Job';
 
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import rateLimit from 'express-rate-limit';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-
-
 const BASE_URL = '/api/v1';
+
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, 
+  max: 100, // أقصى عدد طلبات مسموح بيها لكل يوزر (IP) في الـ 15 دقيقة دي
+  message: { 
+    message:"The allowed request limit has been exceeded, please try again after 15 minutes." 
+  },
+  standardHeaders: true, // بيرجع معلومات الحماية في الـ Headers
+  legacyHeaders: false, // بيلغي الـ Headers القديمة عشان الأداء
+});
+
+// هنا بنقول للسيرفر: أي رابط بيبدأ بـ /api/v1 طبق عليه الحماية دي
+app.use(BASE_URL, apiLimiter); 
+
 
 app.use(cors());
 app.use(express.json());
@@ -109,7 +123,7 @@ app.post(`${BASE_URL}/auth/register`, async (req, res): Promise<any> => {
     // 2. نتأكد إن الإيميل ده مش متسجل قبل كده
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(400).json({ message: "البريد الإلكتروني مسجل بالفعل!" });
+      return res.status(400).json({ message: "The email is already registered!" });
     }
 
     // 3. تشفير الباسورد (Hashing)
@@ -120,7 +134,7 @@ app.post(`${BASE_URL}/auth/register`, async (req, res): Promise<any> => {
     const newUser = new User({
       fullName,
       email,
-      passwordHash: hashedPassword, // بنربط الباسورد المتشفر بالحقل اللي في الـ Schema
+      passwordHash: hashedPassword, 
       role,
       trackName
     });
@@ -128,14 +142,14 @@ app.post(`${BASE_URL}/auth/register`, async (req, res): Promise<any> => {
 
     // 5. صناعة الـ Token (الكارت اللي هيكمل بيه في الموقع)
     const token = jwt.sign(
-      { id: savedUser._id, role: savedUser.role }, // الداتا اللي جوه الكارت
-      process.env.JWT_SECRET as string, // مفتاح التشفير
-      { expiresIn: '7d' } // الكارت هينتهي بعد 7 أيام واليوزر يحتاج يعمل لوج إن تاني
+      { id: savedUser._id, role: savedUser.role }, 
+      process.env.JWT_SECRET as string, 
+      { expiresIn: '7d' } 
     );
 
-    // 6. الرد على الـ Front-end بنجاح
+    
     res.status(201).json({
-      message: "تم إنشاء الحساب بنجاح",
+      message: "The account has been successfully created",
       token: token,
       user: {
         id: savedUser._id,
