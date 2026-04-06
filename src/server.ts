@@ -1,17 +1,17 @@
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import jwt from 'jsonwebtoken';
+import rateLimit from 'express-rate-limit';
 
-import User from './models/user';
+import { User } from './models/user';
 import Chat from './models/chat';
 import Message from './models/Message';
 import Post from './models/Post';
 import Job from './models/Job';
 
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import rateLimit from 'express-rate-limit';
+import { notFound, errorHandler } from './middlewares/errorHandler';
 
 dotenv.config();
 
@@ -19,134 +19,77 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const BASE_URL = '/api/v1';
 
-
+// ==========================================
+// 🛡️ إعدادات الحماية (Rate Limiting)
+// ==========================================
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, 
-  max: 100, // أقصى عدد طلبات مسموح بيها لكل يوزر (IP) في الـ 15 دقيقة دي
+  windowMs: 15 * 60 * 1000, // 15 دقيقة
+  max: 100, // أقصى عدد طلبات لكل يوزر
   message: { 
-    message:"The allowed request limit has been exceeded, please try again after 15 minutes." 
+    message: "The allowed request limit has been exceeded, please try again after 15 minutes." 
   },
-  standardHeaders: true, // بيرجع معلومات الحماية في الـ Headers
-  legacyHeaders: false, // بيلغي الـ Headers القديمة عشان الأداء
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
-// هنا بنقول للسيرفر: أي رابط بيبدأ بـ /api/v1 طبق عليه الحماية دي
 app.use(BASE_URL, apiLimiter); 
-
 
 app.use(cors());
 app.use(express.json());
 
+// ==========================================
+// 🗄️ الاتصال بقاعدة البيانات
+// ==========================================
 mongoose.connect(process.env.MONGO_URI as string)
-  .then(() =>{ 
-    console.log('MongoDB Connected');
-  console.log('📂 Writing to Database:', mongoose.connection.name);
-})
-  .catch(err => console.log(err));
+  .then(() => { 
+    console.log('✅ MongoDB Connected');
+    console.log('📂 Writing to Database:', mongoose.connection.name);
+  })
+  .catch(err => console.log('❌ Database Connection Error:', err));
 
-app.get('/test', (req, res) => {
+// ==========================================
+// 🚀 المسارات (Routes)
+// ==========================================
+
+app.get('/test', (req: Request, res: Response) => {
   res.send('Server is running');
 });
 
-
-app.get(`${BASE_URL}/users`, async (req, res) => {
+// مسار جلب كل المستخدمين
+app.get(`${BASE_URL}/users`, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const users = await User.find(); 
-    res.json(users);
+    res.status(200).json(users);
   } catch (error) {
-    res.status(500).json({ message: "Error fetching users" });
+    next(error); // بنبعت الإيرور للمركز الرئيسي
   }
 });
 
-// 1. مسار لإضافة مستخدم جديد للتجربة
-app.post(`${BASE_URL}/users`, async (req, res) => {
+// مسار التسجيل (Register) - متوافق مع التشفير التلقائي في الموديل
+app.post(`${BASE_URL}/auth/register`, async (req: Request, res: Response, next: NextFunction): Promise<any> => {
   try {
-
-    const newUser = new User(req.body); 
-  
-    const savedUser = await newUser.save(); 
-    
-    
-    res.status(201).json(savedUser); 
-  } catch (error: any) {
-   
-    res.status(400).json({ message: error.message });
-  }
-});
-
-// 2. مسار لإضافة محادثة (Chat)
-app.post(`${BASE_URL}/chats`, async (req, res) => {
-  try {
-    const newChat = new Chat(req.body);
-    res.status(201).json(await newChat.save());
-  } catch (error: any) {
-    res.status(400).json({ message: error.message });
-  }
-});
-
-// 3. مسار لإضافة وظيفة (Job)
-app.post(`${BASE_URL}/jobs`, async (req, res) => {
-  try {
-    const newJob = new Job(req.body);
-    res.status(201).json(await newJob.save());
-  } catch (error: any) {
-    res.status(400).json({ message: error.message });
-  }
-});
-
-// 4. مسار لإضافة منشور (Post)
-app.post(`${BASE_URL}/posts`, async (req, res) => {
-  try {
-    const newPost = new Post(req.body);
-    res.status(201).json(await newPost.save());
-  } catch (error: any) {
-    res.status(400).json({ message: error.message });
-  }
-});
-
-// مسار لإضافة رسالة جديدة (Message)
-app.post(`${BASE_URL}/messages`, async (req, res) => {
-  try {
-    const newMessage = new Message(req.body);
-    res.status(201).json(await newMessage.save());
-  } catch (error: any) {
-    res.status(400).json({ message: error.message });
-  }
-});
-
-// مسار التسجيل (Register)
-app.post(`${BASE_URL}/auth/register`, async (req, res): Promise<any> => {
-  try {
-    // 1. بناخد الداتا اللي جاية من الـ Front-end (لاحظي إننا بناخد password عادي مش متشفر لسه)
     const { fullName, email, password, role, trackName } = req.body;
 
-    // 2. نتأكد إن الإيميل ده مش متسجل قبل كده
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ message: "The email is already registered!" });
     }
 
-    // 3. تشفير الباسورد (Hashing)
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    // 4. حفظ اليوزر في الداتا بيز بالباسورد المتشفر
     const newUser = new User({
       fullName,
       email,
-      passwordHash: hashedPassword, 
+      password, // بنبعت الباسورد العادي والموديل هيشفره
       role,
       trackName
     });
+    
     const savedUser = await newUser.save();
 
-    // 5. صناعة الـ Token (الكارت اللي هيكمل بيه في الموقع)
     const token = jwt.sign(
       { id: savedUser._id, role: savedUser.role }, 
       process.env.JWT_SECRET as string, 
       { expiresIn: '7d' } 
     );
-
     
     res.status(201).json({
       message: "The account has been successfully created",
@@ -160,11 +103,75 @@ app.post(`${BASE_URL}/auth/register`, async (req, res): Promise<any> => {
     });
 
   } catch (error: any) {
-    res.status(500).json({ message: error.message });
+    next(error);
   }
 });
 
+// مسار جلب الوظائف (مدمج ببيانات المستخدم)
+app.get(`${BASE_URL}/jobs`, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const jobs = await Job.find().populate('publisherId', 'fullName email status');
+    res.status(200).json(jobs);
+  } catch (error: any) {
+    next(error);
+  }
+});
+
+// مسار إضافة وظيفة (Job)
+app.post(`${BASE_URL}/jobs`, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const newJob = new Job(req.body);
+    res.status(201).json(await newJob.save());
+  } catch (error: any) {
+    next(error);
+  }
+});
+
+// مسار إضافة محادثة (Chat)
+app.post(`${BASE_URL}/chats`, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const newChat = new Chat(req.body);
+    res.status(201).json(await newChat.save());
+  } catch (error: any) {
+    next(error);
+  }
+});
+
+// مسار إضافة رسالة (Message)
+app.post(`${BASE_URL}/messages`, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const newMessage = new Message(req.body);
+    res.status(201).json(await newMessage.save());
+  } catch (error: any) {
+    next(error);
+  }
+});
+
+// مسار إضافة منشور (Post)
+app.post(`${BASE_URL}/posts`, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const newPost = new Post(req.body);
+    res.status(201).json(await newPost.save());
+  } catch (error: any) {
+    next(error);
+  }
+});
+
+// ==========================================
+// 🚨 حراس معالجة الأخطاء (Global Error Handlers)
+// يجب أن تظل هذه الأكواد في نهاية الملف دائمًا
+// ==========================================
+
+// 1. للتعامل مع الروابط غير الصحيحة
+app.use(notFound);
+
+// 2. المركز الرئيسي للأخطاء
+app.use(errorHandler);
+
+// ==========================================
+// 🌐 تشغيل السيرفر
+// ==========================================
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`🚀 Base URL is ready at: http://localhost:${PORT}${BASE_URL}`);
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🔗 Base URL is ready at: http://localhost:${PORT}${BASE_URL}`);
 });
