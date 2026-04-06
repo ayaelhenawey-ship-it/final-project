@@ -1,9 +1,16 @@
+import dotenv from 'dotenv';
+dotenv.config();
 import express, { Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
-import dotenv from 'dotenv';
-import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
+
+// 1. استيراد إعدادات Passport التي أنشأناها
+import passport from 'passport';
+import './config/passport';
+
+// 2. استيراد مسارات المصادقة المنفصلة (MVC)
+import authRoutes from './routes/authRoutes';
 
 import { User } from './models/user';
 import Chat from './models/chat';
@@ -38,6 +45,12 @@ app.use(cors());
 app.use(express.json());
 
 // ==========================================
+// 🔑 تهيئة المصادقة عبر Passport
+// يجب أن يكون هنا قبل المسارات مباشرة
+// ==========================================
+app.use(passport.initialize());
+
+// ==========================================
 // 🗄️ الاتصال بقاعدة البيانات
 // ==========================================
 mongoose.connect(process.env.MONGO_URI as string)
@@ -55,59 +68,22 @@ app.get('/test', (req: Request, res: Response) => {
   res.send('Server is running');
 });
 
+// 3. استخدام مسارات المصادقة (Auth Routes) المنظمة بطريقة MVC
+// جميع مسارات الـ Login, Register و Google Auth ستعمل من خلال هذا السطر
+app.use(`${BASE_URL}/auth`, authRoutes);
+
+
 // مسار جلب كل المستخدمين
 app.get(`${BASE_URL}/users`, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const users = await User.find(); 
     res.status(200).json(users);
   } catch (error) {
-    next(error); // بنبعت الإيرور للمركز الرئيسي
+    next(error); 
   }
 });
 
-// مسار التسجيل (Register) - متوافق مع التشفير التلقائي في الموديل
-app.post(`${BASE_URL}/auth/register`, async (req: Request, res: Response, next: NextFunction): Promise<any> => {
-  try {
-    const { fullName, email, password, role, trackName } = req.body;
-
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ message: "The email is already registered!" });
-    }
-
-    const newUser = new User({
-      fullName,
-      email,
-      password, // بنبعت الباسورد العادي والموديل هيشفره
-      role,
-      trackName
-    });
-    
-    const savedUser = await newUser.save();
-
-    const token = jwt.sign(
-      { id: savedUser._id, role: savedUser.role }, 
-      process.env.JWT_SECRET as string, 
-      { expiresIn: '7d' } 
-    );
-    
-    res.status(201).json({
-      message: "The account has been successfully created",
-      token: token,
-      user: {
-        id: savedUser._id,
-        fullName: savedUser.fullName,
-        email: savedUser.email,
-        role: savedUser.role
-      }
-    });
-
-  } catch (error: any) {
-    next(error);
-  }
-});
-
-// مسار جلب الوظائف (مدمج ببيانات المستخدم)
+// مسار جلب الوظائف
 app.get(`${BASE_URL}/jobs`, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const jobs = await Job.find().populate('publisherId', 'fullName email status');
@@ -117,7 +93,7 @@ app.get(`${BASE_URL}/jobs`, async (req: Request, res: Response, next: NextFuncti
   }
 });
 
-// مسار إضافة وظيفة (Job)
+// مسار إضافة وظيفة
 app.post(`${BASE_URL}/jobs`, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const newJob = new Job(req.body);
@@ -127,7 +103,7 @@ app.post(`${BASE_URL}/jobs`, async (req: Request, res: Response, next: NextFunct
   }
 });
 
-// مسار إضافة محادثة (Chat)
+// مسار إضافة محادثة
 app.post(`${BASE_URL}/chats`, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const newChat = new Chat(req.body);
@@ -137,7 +113,7 @@ app.post(`${BASE_URL}/chats`, async (req: Request, res: Response, next: NextFunc
   }
 });
 
-// مسار إضافة رسالة (Message)
+// مسار إضافة رسالة
 app.post(`${BASE_URL}/messages`, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const newMessage = new Message(req.body);
@@ -147,7 +123,7 @@ app.post(`${BASE_URL}/messages`, async (req: Request, res: Response, next: NextF
   }
 });
 
-// مسار إضافة منشور (Post)
+// مسار إضافة منشور
 app.post(`${BASE_URL}/posts`, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const newPost = new Post(req.body);
@@ -159,7 +135,6 @@ app.post(`${BASE_URL}/posts`, async (req: Request, res: Response, next: NextFunc
 
 // ==========================================
 // 🚨 حراس معالجة الأخطاء (Global Error Handlers)
-// يجب أن تظل هذه الأكواد في نهاية الملف دائمًا
 // ==========================================
 
 // 1. للتعامل مع الروابط غير الصحيحة

@@ -4,7 +4,8 @@ import bcrypt from 'bcryptjs';
 export interface IUser extends Document {
   fullName: string;
   email: string;
-  password?: string; 
+  password?: string;
+  googleId?: string;
   role: 'student' | 'freelancer' | 'employer';
   trackName?: string;
   skills?: string[];
@@ -20,14 +21,16 @@ export interface IUser extends Document {
 const UserSchema: Schema = new Schema({
   fullName: { type: String, required: true },
   email: { type: String, required: true, unique: true, lowercase: true },
+  googleId: { type: String, unique: true, sparse: true },
   password: { 
     type: String, 
-    required: true,
+    required: function(this: any) { return !this.googleId; }, // مطلوبة فقط إذا لم يوجد حساب جوجل
     select: false 
   },
   role: { 
     type: String, 
     enum: ['student', 'freelancer', 'employer'], 
+    default: 'student',
     required: true 
   },
   trackName: { type: String },
@@ -42,18 +45,12 @@ const UserSchema: Schema = new Schema({
   }
 }, { timestamps: true });
 
-UserSchema.pre('save', async function (this: any) {  
-  if (!this.isModified('password')) return;
-  
-  if (this.password) {
-    this.password = await bcrypt.hash(this.password, 12);
-  }
+UserSchema.pre('save', async function (this: any) {
+  if (!this.isModified('password') || !this.password) return;
+  this.password = await bcrypt.hash(this.password, 12);
 });
 
-UserSchema.methods.comparePassword = async function (
-  candidatePassword: string, 
-  userPassword: string
-): Promise<boolean> {
+UserSchema.methods.comparePassword = async function (candidatePassword: string, userPassword: string): Promise<boolean> {
   return await bcrypt.compare(candidatePassword, userPassword);
 };
 
