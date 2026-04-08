@@ -5,6 +5,7 @@ export interface IUser extends Document {
   fullName: string;
   email: string;
   password?: string; 
+  phoneNumber?: string; 
   role: 'student' | 'freelancer' | 'employer';
   trackName?: string;
   skills?: string[];
@@ -20,11 +21,9 @@ export interface IUser extends Document {
 const UserSchema: Schema = new Schema({
   fullName: { type: String, required: true },
   email: { type: String, required: true, unique: true, lowercase: true },
-  password: { 
-    type: String, 
-    required: true,
-    select: false 
-  },
+phoneNumber: { type: String, required: true, unique: true },
+  password: { type: String, required: true, select: false },
+  googleId: { type: String, sparse: true }, // حقل اختياري للي هيربط حسابه
   role: { 
     type: String, 
     enum: ['student', 'freelancer', 'employer'], 
