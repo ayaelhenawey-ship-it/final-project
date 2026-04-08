@@ -1,15 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { User } from '../models/user';
+// 👈 ضفنا الـ IUser هنا في الاستيراد
+import { User, IUser } from '../models/user'; 
 import { AppError } from '../utils/AppError';
 import { catchAsync } from '../utils/catchAsync';
 
-// Extend Express Request to include the user object globally
+// 👇 التعديل هنا: بنفهم TypeScript إن اليوزر بتاع Passport هو هو الـ IUser بتاعنا بالظبط
 declare global {
   namespace Express {
-    interface Request {
-      user?: any; // Replace 'any' with your IUser interface
-    }
+    interface User extends IUser {}
   }
 }
 
@@ -34,12 +33,7 @@ export const protect = catchAsync(async (req: Request, res: Response, next: Next
     return next(new AppError('The user belonging to this token does no longer exist.', 401));
   }
 
-  // 4. (Optional) Check if user changed password after the token was issued
-  // if (currentUser.changedPasswordAfter(decoded.iat)) {
-  //   return next(new AppError('User recently changed password! Please log in again.', 401));
-  // }
-
-  // 5. Grant access to protected route
+  // 4. Grant access to protected route
   req.user = currentUser;
   next();
 });

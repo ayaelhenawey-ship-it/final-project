@@ -6,6 +6,7 @@ export interface IUser extends Document {
   email: string;
   password?: string; 
   phoneNumber?: string; 
+  googleId?: string;
   role: 'student' | 'freelancer' | 'employer';
   trackName?: string;
   skills?: string[];
@@ -21,12 +22,13 @@ export interface IUser extends Document {
 const UserSchema: Schema = new Schema({
   fullName: { type: String, required: true },
   email: { type: String, required: true, unique: true, lowercase: true },
-phoneNumber: { type: String, required: true, unique: true },
+  phoneNumber: { type: String, required: true, unique: true },
+  googleId: { type: String, unique: true, sparse: true }, // حقل اختياري للربط
   password: { type: String, required: true, select: false },
-  googleId: { type: String, sparse: true }, // حقل اختياري للي هيربط حسابه
   role: { 
     type: String, 
     enum: ['student', 'freelancer', 'employer'], 
+    default: 'student',
     required: true 
   },
   trackName: { type: String },
@@ -41,18 +43,12 @@ phoneNumber: { type: String, required: true, unique: true },
   }
 }, { timestamps: true });
 
-UserSchema.pre('save', async function (this: any) {  
-  if (!this.isModified('password')) return;
-  
-  if (this.password) {
-    this.password = await bcrypt.hash(this.password, 12);
-  }
+UserSchema.pre('save', async function (this: any) {
+  if (!this.isModified('password') || !this.password) return;
+  this.password = await bcrypt.hash(this.password, 12);
 });
 
-UserSchema.methods.comparePassword = async function (
-  candidatePassword: string, 
-  userPassword: string
-): Promise<boolean> {
+UserSchema.methods.comparePassword = async function (candidatePassword: string, userPassword: string): Promise<boolean> {
   return await bcrypt.compare(candidatePassword, userPassword);
 };
 

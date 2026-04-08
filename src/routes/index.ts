@@ -74,6 +74,7 @@ router.post('/auth/register', catchAsync(async (req: Request, res: Response, nex
 }));
 
 // مسار ربط حساب جوجل (مسار محمي)
+// مسار ربط حساب جوجل (مسار محمي)
 router.post('/users/link-google', protect, catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const { googleId } = req.body;
 
@@ -86,7 +87,9 @@ router.post('/users/link-google', protect, catchAsync(async (req: Request, res: 
     return next(new AppError('This Google account is already linked to another user.', 400));
   }
 
-  const user = req.user; 
+  // 👇 التعديل السحري هنا: ضفنا as any 👇
+  const user = req.user as any; 
+  
   user.googleId = googleId;
   await user.save();
 

@@ -1,15 +1,19 @@
-import express from 'express';
+import dotenv from 'dotenv';
+dotenv.config(); // 👈 تعديل زميلتك عشان المتغيرات تتقري بدري
+import express, { Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 
-// 👈 استيراد ملف المسارات المجمع
-import apiRoutes from './routes'; 
+// 1. استيراد إعدادات Passport (من شغل زميلتك)
+import passport from 'passport';
+import './config/passport';
+
+// 2. استيراد المسارات (دمج الشغلين)
+import authRoutes from './routes/authRoutes'; // مسارات زميلتك
+import apiRoutes from './routes'; // مساراتك النظيفة المجمعة
 
 import { notFound, errorHandler } from './middlewares/errorHandler';
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -33,6 +37,11 @@ app.use(cors());
 app.use(express.json());
 
 // ==========================================
+// 🔑 تهيئة المصادقة عبر Passport (من شغل زميلتك)
+// ==========================================
+app.use(passport.initialize());
+
+// ==========================================
 // 🗄️ الاتصال بقاعدة البيانات
 // ==========================================
 mongoose.connect(process.env.MONGO_URI as string)
@@ -45,7 +54,16 @@ mongoose.connect(process.env.MONGO_URI as string)
 // ==========================================
 // 🚀 ربط المسارات بالسيرفر
 // ==========================================
-// السطر ده بيقول للسيرفر: أي ريكويست يبدأ بـ /api/v1، ابعته لملف الـ routes يتصرف معاه
+
+// مسار تجريبي
+app.get('/test', (req: Request, res: Response) => {
+  res.send('Server is running');
+});
+
+// مسارات المصادقة الخاصة بزميلتك (Login, Register, Google Auth)
+app.use(`${BASE_URL}/auth`, authRoutes);
+
+// باقي المسارات بتاعتك النظيفة (Jobs, Chats, Posts, Link-Google)
 app.use(BASE_URL, apiRoutes);
 
 // ==========================================
