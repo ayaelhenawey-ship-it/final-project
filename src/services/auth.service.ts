@@ -11,10 +11,10 @@ export const signToken = (id: string) => {
 };
 
 export const loginUser = async (email: string, password: string) => {
-  if (!email || !password) throw new AppError('الرجاء إدخال البيانات', 400);
+  if (!email || !password) throw new AppError('Please enter the data', 400);
   const user = await User.findOne({ email }).select('+password');
   if (!user || !(await user.comparePassword(password, user.password as string))) {
-    throw new AppError('البيانات غير صحيحة', 401);
+    throw new AppError('The data is incorrect', 401);
   }
   const token = signToken(user._id.toString());
   user.password = undefined;
@@ -23,7 +23,7 @@ export const loginUser = async (email: string, password: string) => {
 
 export const registerUser = async (userData: any) => {
   const existingUser = await User.findOne({ email: userData.email });
-  if (existingUser) throw new AppError('المستخدم موجود بالفعل', 400);
+  if (existingUser) throw new AppError('The user already exists', 400);
   const newUser = await User.create(userData);
   const token = signToken(newUser._id.toString());
   newUser.password = undefined;

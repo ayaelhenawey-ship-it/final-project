@@ -1,5 +1,11 @@
 import dotenv from 'dotenv';
 dotenv.config(); // 👈 تعديل زميلتك عشان المتغيرات تتقري بدري
+
+// 👇 أضفنا السطرين دول مؤقتاً عشان نكشف بيهم على المتغيرات
+console.log("👀 GOOGLE_CLIENT_ID IS:", process.env.GOOGLE_CLIENT_ID);
+console.log("👀 GOOGLE_CLIENT_SECRET IS:", process.env.GOOGLE_CLIENT_SECRET);
+// ---------------------------------------------------------
+
 import express, { Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';

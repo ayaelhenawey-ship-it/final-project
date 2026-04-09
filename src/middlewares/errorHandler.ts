@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 
 // 1. مسار للتعامل مع الروابط الغلط (404 Not Found)
 export const notFound = (req: Request, res: Response, next: NextFunction) => {
-  const error = new Error(`الرابط غير موجود - ${req.originalUrl}`);
+  const error = new Error(`The link does not exist- ${req.originalUrl}`);
   res.status(404);
   next(error); 
 };
@@ -21,12 +21,12 @@ export const errorHandler = (err: any, req: Request, res: Response, next: NextFu
   
   if (err.name === 'CastError' && err.kind === 'ObjectId') {
     statusCode = 404;
-    message = 'لم يتم العثور على العنصر المطلوب، تأكد من صحة الـ ID.';
+    message = 'The requested item was not found, please check the ID for accuracy.';
   }
 
   if (err.code === 11000) {
     statusCode = 400;
-    message = 'هذه البيانات (مثل البريد الإلكتروني أو رقم الهاتف) مسجلة بالفعل لدينا.';
+    message = 'These data (such as email or phone number) are already registered with us.';
   }
 
   if (err.name === 'ValidationError') {

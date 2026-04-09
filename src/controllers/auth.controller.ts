@@ -14,7 +14,7 @@ export const register = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const googleAuthCallback = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
-  if (!req.user) return next(new AppError('فشل تسجيل الدخول بجوجل', 401));
+  if (!req.user) return next(new AppError('Google login failed', 401));
   const token = authService.signToken((req.user as any)._id.toString());
   
   // توجيه المستخدم للفرونت إند (React) مع التوكن

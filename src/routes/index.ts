@@ -13,6 +13,8 @@ import { protect } from '../middlewares/auth.middleware';
 import { catchAsync } from '../utils/catchAsync';
 import { AppError } from '../utils/AppError';
 
+import { getMyProfile, updateMyProfile, getUserProfile, deleteMyAccount } from '../controllers/profile.controller'; 
+
 // إنشاء الـ Router
 const router = Router();
 
@@ -134,4 +136,11 @@ router.post('/posts', catchAsync(async (req: Request, res: Response, next: NextF
   res.status(201).json(await newPost.save());
 }));
 
+// مسار عشان اليوزر يشوف بروفايل أي حد تاني (مش محتاج حماية أو ممكن تحميه حسب رغبتكم)
+router.get('/users/:id', protect, getUserProfile);
+
+// المسارات الشخصية (لازم يكون عامل لوجين - نستخدم الميدل وير protect)
+router.get('/profile/me', protect, getMyProfile);
+router.patch('/profile/me', protect, updateMyProfile); // بنستخدم Patch لأننا بنحدث أجزاء معينة مش اليوزر كله
+router.delete('/profile/me', protect, deleteMyAccount);
 export default router;

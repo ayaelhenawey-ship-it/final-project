@@ -7,7 +7,8 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID as string,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
-      callbackURL: '/api/auth/google/callback',
+      // ⚠️ تأكدي إن اللينك ده هو نفس اللي مكتوب في Google Cloud Console بالظبط
+      callbackURL: '/api/v1/auth/google/callback', 
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
@@ -15,24 +16,19 @@ passport.use(
         let user = await User.findOne({ email: profile.emails?.[0].value });
 
         if (user) {
-          // إذا كان موجوداً ولم يربط حساب جوجل من قبل، قم بربطه
+          // إذا كان موجوداً ولم يربط حساب جوجل من قبل، قم بربطه أوتوماتيكياً (تسهيلاً لليوزر)
           if (!user.googleId) {
             user.googleId = profile.id;
-            await user.save();
+            await user.save(); // ده هيشتغل عادي لأن اليوزر متسجل برقم تليفونه مسبقاً
           }
+          // تسجيل دخول ناجح
           return done(null, user);
         }
 
-        // 2. إذا لم يكن موجوداً، قم بإنشاء حساب جديد
-        user = await User.create({
-          fullName: profile.displayName,
-          email: profile.emails?.[0].value,
-          googleId: profile.id,
-          role: 'student', // الدور الافتراضي
-          status: 'online',
-        });
+        // 2. التعديل الجوهري: إذا لم يكن موجوداً، نرفض الطلب بدلاً من إنشاء حساب!
+        // لا يمكننا إنشاء حساب بدون رقم هاتف، لذلك نعيد false (فشل تسجيل الدخول)
+        return done(null, false, { message: 'This account is not registered with us. Please create an account with the phone number first.' });
 
-        done(null, user);
       } catch (error) {
         done(error, undefined);
       }
