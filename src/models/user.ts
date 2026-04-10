@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 export interface IUser extends Document {
+  avatar?: string;
   fullName: string;
   email: string;
   password?: string; 
@@ -40,7 +41,8 @@ const UserSchema: Schema = new Schema({
     type: String, 
     enum: ['online', 'offline', 'busy'], 
     default: 'offline' 
-  }
+  },
+  avatar: { type: String, default: "" }
 }, { timestamps: true });
 
 UserSchema.pre('save', async function (this: any) {

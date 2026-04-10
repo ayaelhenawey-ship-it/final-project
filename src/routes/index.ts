@@ -15,6 +15,9 @@ import { AppError } from '../utils/AppError';
 
 import { getMyProfile, updateMyProfile, getUserProfile, deleteMyAccount } from '../controllers/profile.controller'; 
 
+import { uploadAvatar } from '../middlewares/upload.middleware';
+import { uploadProfileAvatar } from '../controllers/profile.controller';
+
 // إنشاء الـ Router
 const router = Router();
 
@@ -143,4 +146,7 @@ router.get('/users/:id', protect, getUserProfile);
 router.get('/profile/me', protect, getMyProfile);
 router.patch('/profile/me', protect, updateMyProfile); // بنستخدم Patch لأننا بنحدث أجزاء معينة مش اليوزر كله
 router.delete('/profile/me', protect, deleteMyAccount);
+
+// مسار رفع الصورة (الحارس -> مستلم الصور -> الكنترولر)
+router.patch('/profile/me/avatar', protect, uploadAvatar.single('avatar'), uploadProfileAvatar);
 export default router;

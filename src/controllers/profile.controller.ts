@@ -69,3 +69,31 @@ export const deleteMyAccount = catchAsync(async (req: Request, res: Response, ne
     data: null
   });
 });
+
+// ==========================================
+// 👇 الإضافة الجديدة الخاصة برفع الصورة الشخصية
+// ==========================================
+
+// 5. تحديث الصورة الشخصية (Avatar)
+export const uploadProfileAvatar = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  // 1. لو اليوزر مبعتش صورة أو الميدل وير رفضها
+  if (!req.file) {
+    return next(new AppError('Please upload an image file.', 400));
+  }
+
+  // 2. ده اللينك اللي رجع من Cloudinary
+  const avatarUrl = req.file.path;
+
+  // 3. تحديث اليوزر باللينك الجديد في قاعدة البيانات
+  const updatedUser = await User.findByIdAndUpdate(
+    req.user!._id, 
+    { avatar: avatarUrl }, 
+    { new: true, runValidators: true }
+  );
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Avatar uploaded successfully',
+    data: { user: updatedUser }
+  });
+});
