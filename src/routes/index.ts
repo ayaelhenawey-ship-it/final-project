@@ -13,7 +13,7 @@ import { protect } from '../middlewares/auth.middleware';
 import { catchAsync } from '../utils/catchAsync';
 import { AppError } from '../utils/AppError';
 
-import { getMyProfile, updateMyProfile, getUserProfile, deleteMyAccount } from '../controllers/profile.controller'; 
+import { getMyProfile, updateMyProfile, getUserProfile, deleteMyAccount ,searchUsers  } from '../controllers/profile.controller'; 
 
 import { uploadAvatar } from '../middlewares/upload.middleware';
 import { uploadProfileAvatar } from '../controllers/profile.controller';
@@ -139,6 +139,8 @@ router.post('/posts', catchAsync(async (req: Request, res: Response, next: NextF
   res.status(201).json(await newPost.save());
 }));
 
+// مسار البحث (بنحميه بـ protect عشان بس المسجلين في رابطة هما اللي يبحثوا)
+router.get('/users/search/all', protect, searchUsers);
 // مسار عشان اليوزر يشوف بروفايل أي حد تاني (مش محتاج حماية أو ممكن تحميه حسب رغبتكم)
 router.get('/users/:id', protect, getUserProfile);
 
@@ -150,3 +152,6 @@ router.delete('/profile/me', protect, deleteMyAccount);
 // مسار رفع الصورة (الحارس -> مستلم الصور -> الكنترولر)
 router.patch('/profile/me/avatar', protect, uploadAvatar.single('avatar'), uploadProfileAvatar);
 export default router;
+
+
+

@@ -97,3 +97,54 @@ export const uploadProfileAvatar = catchAsync(async (req: Request, res: Response
     data: { user: updatedUser }
   });
 });
+
+// 6. البحث عن المستخدمين (للتوظيف أو التواصل)
+export const searchUsers = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  // 1. تجهيز أوبجكت الفلترة الفاضي
+  const queryObj: any = {};
+
+  // أ. البحث بكلمة مفتاحية (Keyword) في الاسم أو المهارات أو النبذة
+  if (req.query.keyword) {
+    // استخدمنا Regex عشان نبحث عن جزء من الكلمة (حتى لو مش الكلمة كاملة)
+    // حرف الـ 'i' معناه (Case-insensitive) عشان يتجاهل الحروف الكابيتال والسمول
+    const searchRegex = new RegExp(req.query.keyword as string, 'i');
+    
+    queryObj.$or = [
+      { fullName: searchRegex },
+      { skills: searchRegex },
+      { bio: searchRegex }
+    ];
+  }
+
+  // ب. الفلترة المباشرة باسم التراك (مسار الـ ITI)
+  if (req.query.trackName) {
+    queryObj.trackName = req.query.trackName;
+  }
+
+  // 2. إعدادات تقسيم الصفحات (Pagination)
+  const page = parseInt(req.query.page as string) || 1; // الصفحة الافتراضية 1
+  const limit = parseInt(req.query.limit as string) || 10; // عدد اليوزرز في الصفحة 10
+  const skip = (page - 1) * limit; // هنفوت كام يوزر عشان نجيب الصفحة اللي بعدها
+
+  // 3. تنفيذ البحث في قاعدة البيانات
+  const users = await User.find(queryObj)
+    // حماية: بنحدد الداتا اللي هترجع عشان منبعتش الباسورد أو بيانات حساسة
+    .select('fullName avatar trackName skills bio companyName status role') 
+    .skip(skip)
+    .limit(limit)
+    .sort('-createdAt'); // ترتيب من الأحدث للأقدم
+
+  // 4. حساب العدد الكلي (مهم جداً للفرونت إند عشان يعمل زراير الـ Next و الـ Prev)
+  const totalUsers = await User.countDocuments(queryObj);
+
+  res.status(200).json({
+    status: 'success',
+    results: users.length, // عدد اليوزرز في الصفحة دي
+    pagination: {
+      currentPage: page,
+      totalPages: Math.ceil(totalUsers / limit),
+      totalUsers: totalUsers
+    },
+    data: { users }
+  });
+});

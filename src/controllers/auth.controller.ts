@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import * as authService from '../services/auth.service';
 import { catchAsync } from '../utils/catchAsync';
 import { AppError } from '../utils/AppError';
+import jwt from 'jsonwebtoken';
 
 export const login = catchAsync(async (req: Request, res: Response) => {
   const { user, token } = await authService.loginUser(req.body.email, req.body.password);
