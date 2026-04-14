@@ -45,6 +45,13 @@ const UserSchema: Schema = new Schema({
   avatar: { type: String, default: "" }
 }, { timestamps: true });
 
+// يعني إيه index: الـ Index زي الفهرس في الكتاب، بيخلي الداتا بيز توصل للمعلومة بسرعة بدل ما تدور في كل السجلات.
+// ليه بنستخدمه: عشان نسرع عملية البحث، بالذات على الحقول اللي بنستخدمها كتير في الفلتر زي الاسم والمهارات ومسار الكورس.
+// ليه مش بنعمل index لكل حاجة: لأن كل Index بياخد مساحة تخزين وبيبطئ عمليات الإضافة والتعديل (Write cost)، فلازم نوازن ما بين الـ read performance ومابين التكلفة.
+UserSchema.index({ fullName: 1 });
+UserSchema.index({ skills: 1 });
+UserSchema.index({ trackName: 1 });
+
 UserSchema.pre('save', async function (this: any) {
   if (!this.isModified('password') || !this.password) return;
   this.password = await bcrypt.hash(this.password, 12);

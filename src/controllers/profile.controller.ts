@@ -20,10 +20,28 @@ export const updateMyProfile = catchAsync(async (req: Request, res: Response, ne
   }
 
   // 2. نفلتر الداتا عشان الهاكرز ميرفعوش الـ role بتاعهم لـ Admin مثلاً!
-  const allowedUpdates = {
+  let normalizedSkills;
+  
+  if (req.body.skills && Array.isArray(req.body.skills)) {
+    // ليه بنعمل normalization:
+    // عشان نوحد شكل البيانات في الداتا بيز (كله حروف صغيرة ومن غير مسافات زيادة)
+    // ده بيحسن جداً من كفاءة البحث وبيمنع تكرار نفس المهارة بأشكال مختلفة (مثلاً React و react و  React)
+    const uniqueSkills = [...new Set(
+      req.body.skills.map((skill: string) => skill.toLowerCase().trim())
+    )];
+
+    // ليه حاطين limit:
+    // عشان نحمي الداتا بيز من أحجام البيانات الضخمة (الـ Payload) ونمنع اليوزر إنه يضيف مهارات عشوائية بلا نهاية فده بيحسن الأداء
+    if (uniqueSkills.length > 15) {
+      return next(new AppError('You cannot add more than 15 skills.', 400));
+    }
+    normalizedSkills = uniqueSkills;
+  }
+
+  const allowedUpdates: any = {
     fullName: req.body.fullName,
     bio: req.body.bio,
-    skills: req.body.skills,
+    skills: normalizedSkills !== undefined ? normalizedSkills : req.body.skills,
     portfolioLinks: req.body.portfolioLinks,
     trackName: req.body.trackName,
     companyName: req.body.companyName,
@@ -31,7 +49,7 @@ export const updateMyProfile = catchAsync(async (req: Request, res: Response, ne
   };
 
   // تنظيف الأوبجكت من أي قيم undefined عشان منمسحش داتا قديمة
-  Object.keys(allowedUpdates).forEach(key => (allowedUpdates as any)[key] === undefined && delete (allowedUpdates as any)[key]);
+  Object.keys(allowedUpdates).forEach(key => allowedUpdates[key] === undefined && delete allowedUpdates[key]);
 
   // 3. التحديث في قاعدة البيانات
   const updatedUser = await User.findByIdAndUpdate(req.user!._id, allowedUpdates, {

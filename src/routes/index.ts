@@ -17,6 +17,7 @@ import { getMyProfile, updateMyProfile, getUserProfile, deleteMyAccount ,searchU
 
 import { uploadAvatar } from '../middlewares/upload.middleware';
 import { uploadProfileAvatar } from '../controllers/profile.controller';
+import { restrictTo } from '../middlewares/authorize.middleware';
 
 // إنشاء الـ Router
 const router = Router();
@@ -110,15 +111,58 @@ router.post('/users/link-google', protect, catchAsync(async (req: Request, res: 
 }));
 
 // مسار جلب الوظائف
-router.get('/jobs', catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+router.get('/jobs', protect, catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const jobs = await Job.find().populate('publisherId', 'fullName email status');
   res.status(200).json(jobs);
 }));
 
 // مسار إضافة وظيفة
-router.post('/jobs', catchAsync(async (req: Request, res: Response, next: NextFunction) => {
-  const newJob = new Job(req.body);
+router.post('/jobs', protect, restrictTo('employer'), catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const newJob = new Job({ ...req.body, publisherId: (req.user as any)._id });
   res.status(201).json(await newJob.save());
+}));
+
+// مسار التقديم على الوظيفة
+router.post('/jobs/:id/apply', protect, restrictTo('student', 'freelancer'), catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const job = await Job.findById(req.params.id);
+  if (!job) return next(new AppError('Job not found', 404));
+  
+  if (!job.applicants) job.applicants = [];
+  
+  job.applicants.push({
+    userId: (req.user as any)._id,
+    proposal: req.body.proposal,
+    status: 'pending',
+    appliedAt: new Date()
+  });
+  await job.save();
+  res.status(200).json({ status: 'success', message: 'Applied successfully' });
+}));
+
+// مسار حذف الوظيفة (OWN jobs)
+router.delete('/jobs/:id', protect, restrictTo('employer'), catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const job = await Job.findById(req.params.id);
+  if (!job) return next(new AppError('Job not found', 404));
+  
+  // التأكد من أن صاحب الوظيفة هو اللي بيمسحها
+  if (job.publisherId.toString() !== (req.user as any)._id.toString()) {
+     return next(new AppError('You can only delete your own jobs', 403));
+  }
+  
+  await job.deleteOne();
+  res.status(204).json({ status: 'success', data: null });
+}));
+
+// مسار رؤية المتقدمين (لمنشئ الوظيفة)
+router.get('/jobs/:id/applicants', protect, restrictTo('employer'), catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const job = await Job.findById(req.params.id).populate('applicants.userId', 'fullName email skills phoneNumber');
+  if (!job) return next(new AppError('Job not found', 404));
+
+  if (job.publisherId.toString() !== (req.user as any)._id.toString()) {
+     return next(new AppError('You can only view applicants for your own jobs', 403));
+  }
+  
+  res.status(200).json({ status: 'success', data: { applicants: job.applicants } });
 }));
 
 // مسار إضافة محادثة
