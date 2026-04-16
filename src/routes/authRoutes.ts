@@ -3,12 +3,12 @@
 import { Router } from 'express';
 import passport from 'passport';
 import { login, register, googleAuthCallback } from '../controllers/auth.controller';
+import { registerValidator, loginValidator } from '../validators/authValidator';
 
 const router = Router();
 
-router.post('/login', login);
-router.post('/register', register);
-
+router.post('/register', registerValidator, register);
+router.post('/login', loginValidator, login);
 router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'], session: false }));
 
 // ✅ التعديل النهائي الجاهز للفرونت إند

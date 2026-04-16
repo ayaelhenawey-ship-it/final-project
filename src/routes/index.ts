@@ -19,8 +19,11 @@ import { uploadAvatar } from '../middlewares/upload.middleware';
 import { uploadProfileAvatar } from '../controllers/profile.controller';
 import { restrictTo } from '../middlewares/authorize.middleware';
 
+import callRoutes from './callRoutes';
+
 // إنشاء الـ Router
 const router = Router();
+router.use('/calls', callRoutes);
 
 // ==========================================
 // 🚀 المسارات (Routes)
@@ -79,7 +82,7 @@ router.post('/auth/register', catchAsync(async (req: Request, res: Response, nex
   });
 }));
 
-// مسار ربط حساب جوجل (مسار محمي)
+
 // مسار ربط حساب جوجل (مسار محمي)
 router.post('/users/link-google', protect, catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const { googleId } = req.body;
