@@ -20,10 +20,12 @@ import { uploadProfileAvatar } from '../controllers/profile.controller';
 import { restrictTo } from '../middlewares/authorize.middleware';
 
 import callRoutes from './callRoutes';
+import chatRoutes from './chatRoutes';
 
 // إنشاء الـ Router
 const router = Router();
 router.use('/calls', callRoutes);
+router.use('/chats', chatRoutes);
 
 // ==========================================
 // 🚀 المسارات (Routes)
@@ -168,17 +170,8 @@ router.get('/jobs/:id/applicants', protect, restrictTo('employer'), catchAsync(a
   res.status(200).json({ status: 'success', data: { applicants: job.applicants } });
 }));
 
-// مسار إضافة محادثة
-router.post('/chats', catchAsync(async (req: Request, res: Response, next: NextFunction) => {
-  const newChat = new Chat(req.body);
-  res.status(201).json(await newChat.save());
-}));
-
-// مسار إضافة رسالة
-router.post('/messages', catchAsync(async (req: Request, res: Response, next: NextFunction) => {
-  const newMessage = new Message(req.body);
-  res.status(201).json(await newMessage.save());
-}));
+// ✅ مسارات الشات والرسائل اتنقلت لـ chatRoutes.ts عشان تكون منظمة ومحمية
+// راجع: routes/chatRoutes.ts + controllers/chat.controller.ts + services/chat.service.ts
 
 // مسار إضافة منشور
 router.post('/posts', catchAsync(async (req: Request, res: Response, next: NextFunction) => {

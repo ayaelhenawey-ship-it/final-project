@@ -19,7 +19,10 @@ import { notFound, errorHandler } from './middlewares/errorHandler';
 
 import http from 'http'; 
 import { Server } from 'socket.io'; 
+import jwt from 'jsonwebtoken';
 import Call from './models/Call'; 
+import { User } from './models/user';
+import * as chatService from './services/chat.service';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -48,14 +51,135 @@ const io = new Server(server, {
 
 export const userSocketMap = new Map<string, string>();
 
+// ==========================================
+// 🔐 مصادقة اتصال الـ Socket (Socket Authentication Middleware)
+// ==========================================
+// الفرق بين API auth و socket auth:
+// 1. في الـ API العادي: التوكن بييجي في الـ Header مع كل Request (Authorization: Bearer xxx)
+//    والميدل وير بيتحقق منه قبل ما يسمح بالوصول للـ endpoint
+// 2. في الـ Socket: التوكن بييجي مرة واحدة بس وقت الـ connection (handshake)
+//    لأن الاتصال بيفضل مفتوح طول الوقت (persistent connection)
+//    فمينفعش نبعت header مع كل event زي الـ REST API
+// 3. عشان كده بنستخدم io.use() كـ middleware بيتنفذ قبل ما الاتصال يتم
+//    لو التوكن غلط أو مش موجود، بنرفض الاتصال من الأول
+io.use(async (socket, next) => {
+  try {
+    // التوكن ممكن ييجي في الـ auth object أو كـ query parameter
+    const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+
+    if (!token) {
+      return next(new Error('Authentication error: Token is required'));
+    }
+
+    // التحقق من صحة التوكن (نفس اللوجيك بتاع الـ API بالظبط)
+    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as jwt.JwtPayload;
+
+    // التأكد إن اليوزر لسه موجود في الداتا بيز
+    const user = await User.findById(decoded.id);
+    if (!user) {
+      return next(new Error('Authentication error: User not found'));
+    }
+
+    // بنحفظ بيانات اليوزر على الـ socket عشان نستخدمها بعد كده في الـ events
+    (socket as any).userId = user._id.toString();
+    (socket as any).user = user;
+
+    next();
+  } catch (error) {
+    return next(new Error('Authentication error: Invalid token'));
+  }
+});
+
 io.on('connection', (socket) => {
+  const authenticatedUserId = (socket as any).userId;
   console.log(`🟢 A new device connected to the switchboard, line number: ${socket.id}`);
 
+  // ==========================================
+  // 📝 تسجيل اليوزر تلقائياً بعد المصادقة
+  // ==========================================
+  // بما إن اليوزر اتأكدنا من هويته في الـ middleware
+  // بنسجله تلقائياً في الـ userSocketMap
+  if (authenticatedUserId) {
+    userSocketMap.set(authenticatedUserId, socket.id);
+    console.log(`✅ [Auto] The user [${authenticatedUserId}] registered via auth middleware on line [${socket.id}]`);
+  }
+
+  // التسجيل اليدوي (للتوافق مع الكود القديم)
   socket.on('register-user', (userId: string) => {
     userSocketMap.set(userId, socket.id);
     console.log(`✅ The user [${userId}] Connected to the socket line [${socket.id}]`);
   });
 
+  // ==========================================
+  // 🏠 الانضمام لغرف الشات (Socket Rooms)
+  // ==========================================
+  // فكرة الـ rooms:
+  // بدل ما نبعت الرسالة لكل عضو في الجروب لوحده (يعني 100 emit لـ 100 عضو)
+  // بنستخدم الـ rooms عشان نبعت emit واحد بس والـ Socket.io بيوزعها على كل اللي في الغرفة
+  // 1. كل شات (سواء فردي أو جماعي) بيكون ليه room باسم الـ chatId
+  // 2. لما يوزر يفتح شات، بينضم للـ room بتاعته
+  // 3. لما حد يبعت رسالة، بنعمل emit للـ room كلها مش لشخص واحد
+  // ليه بنستخدمها بدل ما نبعت لكل واحد لوحده؟
+  // - الأداء: emit واحد بدل N emits
+  // - التنظيم: كل غرفة مسؤولة عن نفسها
+  // - السهولة: مش محتاج نلف على كل الأعضاء ونبعت لكل واحد
+  socket.on('join-room', (roomId: string) => {
+    socket.join(roomId);
+    console.log(`🏠 User [${authenticatedUserId}] joined room [${roomId}]`);
+  });
+
+  // مغادرة غرفة (لما اليوزر يقفل الشات)
+  socket.on('leave-room', (roomId: string) => {
+    socket.leave(roomId);
+    console.log(`🚪 User [${authenticatedUserId}] left room [${roomId}]`);
+  });
+
+  // ==========================================
+  // 💬 إرسال واستقبال الرسائل (Chat Events)
+  // ==========================================
+  socket.on('send-message', async (data: { chatId: string, content: string, messageType?: string }) => {
+    try {
+      // حفظ الرسالة في الداتا بيز
+      const savedMessage = await chatService.createMessage({
+        chatId: data.chatId,
+        senderId: authenticatedUserId,
+        content: data.content,
+        messageType: data.messageType
+      });
+
+      // بنبعت الرسالة لكل اللي في الـ room (الشات) - سواء فردي أو جماعي
+      // io.to(roomId) بتبعت لكل اللي في الغرفة (بما فيهم المرسل)
+      io.to(data.chatId).emit('receive-message', savedMessage);
+
+      console.log(`💬 Message from [${authenticatedUserId}] in chat [${data.chatId}]`);
+    } catch (error: any) {
+      // لو حصل أي مشكلة (زي إن اليوزر مش عضو في الشات)، نبلغ المرسل بس
+      socket.emit('message-error', { message: error.message || 'Failed to send message' });
+      console.log("Error sending message:", error);
+    }
+  });
+
+  // ==========================================
+  // ✍️ حالة الكتابة (Typing Indicator)
+  // ==========================================
+  socket.on('typing', (data: { chatId: string }) => {
+    // بنبعت لكل اللي في الغرفة ماعدا المرسل (عشان مش هيعرض لنفسه إنه بيكتب)
+    socket.to(data.chatId).emit('user-typing', {
+      userId: authenticatedUserId,
+      chatId: data.chatId
+    });
+  });
+
+  socket.on('stop-typing', (data: { chatId: string }) => {
+    socket.to(data.chatId).emit('user-stop-typing', {
+      userId: authenticatedUserId,
+      chatId: data.chatId
+    });
+  });
+
+  // ==========================================
+  // 📞 أحداث المكالمات (Call Events) - موجودة من قبل
+  // ==========================================
   socket.on('call-user', async (data: { userToCall: string, signalData: any, from: string, callerName: string }) => {
     console.log("🚨 The server received an event call-user Successfully! And the data is:", data);
     try {
