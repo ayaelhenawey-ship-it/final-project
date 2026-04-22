@@ -8,10 +8,12 @@
 ## 1️⃣ مسارات المصادقة (Authentication)
 
 ### 🟢 1. إنشاء حساب جديد (Register)
-* **المسار:** `POST /auth/register`
-* **الوصف:** لإنشاء حساب جديد كطالب، مستقل، أو صاحب عمل.
-* **البيانات المطلوبة (Body):**
-```json
+
+- **المسار:** `POST /auth/register`
+- **الوصف:** لإنشاء حساب جديد كطالب، مستقل، أو صاحب عمل.
+- **البيانات المطلوبة (Body):**
+
+````json
 {
   "fullName": "Menna ITI",
   "email": "menna@example.com",
@@ -145,7 +147,7 @@ JSON
 
 {
   "status": "success",
-  "data": { ... } 
+  "data": { ... }
 }
 في حالة الخطأ (Error):
 
@@ -156,3 +158,83 @@ JSON
   "message": "وصف الخطأ هنا",
   "errors": [ ... ] // تظهر فقط في حالة أخطاء التحقق من البيانات (Validation)
 }
+
+
+// --------------- Week number 3 Youssef -------------------
+
+* **تجهيز الـ APIdog (أو Postman):** تظبط الريكويستات اللي عملناها (زي إنشاء المجتمع، وجلب الرسائل) وتعملها Export في فايل، بحيث أي حد في التيم يعملها Import عنده ويشوف اللينكات وشكل الـ Body والـ Headers جاهزة قدامه بدل ما يكتبها من الصفر.
+* **توثيق السوكيت (Socket Events Docs):** الـ REST API سهل يتفهم، بس السوكيت بيلخبط الفرونت إند. محتاج تكتبلهم نوت سريعة فيها أسماء الـ Events المظبوطة (`join-room`, `send-message`, `receive-message`) وشكل الـ JSON اللي المفروض يبعتوه ويستقبلوه.
+* **تعليمات تشغيل السيرفر اللوكال:** وإنت بتكتب دوكيومنت التشغيل للتيم، ضروري جداً تحط خطوة إنهم يقفلوا أي برامج شغالة في الخلفية زي Ollama قبل ما يقوموا المشروع، عشان يتجنبوا أي مشكلة في تداخل البورتات (Port conflicts) السيرفر يضرب معاهم.
+
+---
+
+# 🚀 Rabta Project - Chat & Socket.io Handover Docs
+
+## ⚠️ تعليمات هامة قبل التشغيل (Local Setup)
+برجاء التأكد من إغلاق أي برامج تعمل في الخلفية وتستهلك الـ Ports (مثل برنامج Ollama أو أي سيرفر آخر) لتجنب حدوث Port Conflicts أثناء تشغيل سيرفر الباك إند.
+
+---
+
+## 1️⃣ REST APIs (HTTP)
+
+### A. Create Community (إنشاء مجتمع متخصص)
+- **Method:** `POST`
+- **Endpoint:** `/api/v1/chats/communities`
+- **Headers:** `Authorization: Bearer <Your_Token>`
+- **Body (JSON):**
+  ```json
+  {
+    "name": "React ITI 2026",
+    "description": "أفضل مجتمع لمطوري رياكت",
+    "category": "frontend",
+    "tags": ["react", "javascript"]
+  }
+````
+
+- **Note:** الحقل `category` يجب أن يكون Unique. إذا تم إرسال قسم موجود مسبقاً، سيرد السيرفر بـ Status `400` مع الرسالة التالية:
+  `"A community for this category already exists. Please join it instead of creating a new one."`
+
+### B. Get Message History (جلب الرسائل السابقة للشات)
+
+- **Method:** `GET`
+- **Endpoint:** `/api/v1/chats/:chatId/messages` _(قم باستبدال `:chatId` بـ ID الشات وليس ID المجتمع)_
+- **Headers:** `Authorization: Bearer <Your_Token>`
+
+---
+
+## 2️⃣ Socket.io (Real-time Chat)
+
+### A. Connection (الاتصال بالسيرفر)
+
+- **URL:** `http://localhost:5000`
+- **Auth:** السيرفر محمي. يجب إرسال الـ Token الصافي (بدون كلمة Bearer) في الـ Query.
+- **مثال للفرونت إند:**
+  ```javascript
+  const socket = io("http://localhost:5000", {
+    query: { token: "eyJhbGciOiJIUzI1..." },
+  });
+  ```
+
+### B. Events (أحداث السوكيت)
+
+**1. Join Room (دخول غرفة الشات):**
+
+- **Event Name:** `join-room`
+- **Payload:** `chatId` (String)
+- **الوصف:** يجب إرسال هذا الحدث بمجرد فتح المستخدم لأي شات حتى يتمكن من إرسال واستقبال الرسائل الخاصة بهذه الغرفة.
+
+**2. Send Message (إرسال رسالة):**
+
+- **Event Name:** `send-message`
+- **Payload (JSON Object):**
+  ```json
+  {
+    "chatId": "65f1a2b3c4d5e...",
+    "content": "محتوى الرسالة هنا"
+  }
+  ```
+
+**3. Receive Message (استقبال رسالة):**
+
+- **Event Name:** `receive-message`
+- **الوصف:** يجب عمل `socket.on` لهذا الحدث. سيقوم السيرفر بإرسال كائن (Object) الرسالة كاملاً (يحتوي على بيانات المرسل والتاريخ) فور إرسال أي رسالة داخل الغرفة.
