@@ -1,8 +1,8 @@
-import mongoose from 'mongoose';
-import Chat from '../models/chat';
-import Message from '../models/Message';
-import Community from '../models/Community';
-import { AppError } from '../utils/AppError';
+import mongoose from "mongoose";
+import Chat from "../models/chat";
+import Message from "../models/Message";
+import Community from "../models/Community";
+import { AppError } from "../utils/AppError";
 
 // ==========================================
 // 💬 سيرفس الشات والرسائل
@@ -24,28 +24,30 @@ export const createMessage = async (data: {
 }) => {
   // التأكد إن الشات موجود فعلاً
   const chat = await Chat.findById(data.chatId);
-  if (!chat) throw new AppError('Chat not found', 404);
+  if (!chat) throw new AppError("Chat not found", 404);
 
   // التأكد إن المرسل عضو في الشات ده (حماية مهمة)
   const isMember = chat.users.some(
-    (userId) => userId.toString() === data.senderId
+    (userId) => userId.toString() === data.senderId,
   );
-  if (!isMember) throw new AppError('You are not a member of this chat', 403);
+  if (!isMember) throw new AppError("You are not a member of this chat", 403);
 
   // إنشاء الرسالة في الداتا بيز
   const newMessage = await Message.create({
     chatId: data.chatId,
     senderId: data.senderId,
     content: data.content,
-    messageType: data.messageType || 'text'
+    messageType: data.messageType || "text",
   });
 
   // تحديث آخر رسالة في الشات عشان الفرونت إند يعرضها في قائمة المحادثات
   await Chat.findByIdAndUpdate(data.chatId, { latestMessage: newMessage._id });
 
   // بنرجع الرسالة مع بيانات المرسل (الاسم والصورة)
-  const populatedMessage = await Message.findById(newMessage._id)
-    .populate('senderId', 'fullName avatar');
+  const populatedMessage = await Message.findById(newMessage._id).populate(
+    "senderId",
+    "fullName avatar",
+  );
 
   return populatedMessage;
 };
@@ -61,16 +63,14 @@ export const getChatMessages = async (
   chatId: string,
   userId: string,
   limit: number = 30,
-  before?: string // cursor: الرسائل اللي قبل الـ ID ده
+  before?: string, // cursor: الرسائل اللي قبل الـ ID ده
 ) => {
   // التأكد إن الشات موجود واليوزر عضو فيه
   const chat = await Chat.findById(chatId);
-  if (!chat) throw new AppError('Chat not found', 404);
+  if (!chat) throw new AppError("Chat not found", 404);
 
-  const isMember = chat.users.some(
-    (userId_) => userId_.toString() === userId
-  );
-  if (!isMember) throw new AppError('You are not a member of this chat', 403);
+  const isMember = chat.users.some((userId_) => userId_.toString() === userId);
+  if (!isMember) throw new AppError("You are not a member of this chat", 403);
 
   // بناء الـ query
   const query: any = { chatId };
@@ -84,7 +84,7 @@ export const getChatMessages = async (
   const safeLimit = Math.min(Math.max(limit, 20), 50);
 
   const messages = await Message.find(query)
-    .populate('senderId', 'fullName avatar')
+    .populate("senderId", "fullName avatar")
     .sort({ createdAt: -1 }) // الأحدث الأول
     .limit(safeLimit);
 
@@ -95,23 +95,28 @@ export const getChatMessages = async (
 // ==========================================
 // 🤝 إنشاء أو جلب محادثة فردية (One-to-One)
 // ==========================================
-export const accessOrCreateChat = async (currentUserId: string, otherUserId: string) => {
+export const accessOrCreateChat = async (
+  currentUserId: string,
+  otherUserId: string,
+) => {
   // بنبحث هل فيه شات فردي (مش جروب) بين اليوزرين دول
   let chat = await Chat.findOne({
     isGroup: false,
-    users: { $all: [currentUserId, otherUserId], $size: 2 }
+    users: { $all: [currentUserId, otherUserId], $size: 2 },
   })
-    .populate('users', 'fullName avatar status')
-    .populate('latestMessage');
+    .populate("users", "fullName avatar status")
+    .populate("latestMessage");
 
   // لو مش موجود بننشئ واحد جديد
   if (!chat) {
     chat = await Chat.create({
       isGroup: false,
-      users: [currentUserId, otherUserId]
+      users: [currentUserId, otherUserId],
     });
-    chat = await Chat.findById(chat._id)
-      .populate('users', 'fullName avatar status');
+    chat = await Chat.findById(chat._id).populate(
+      "users",
+      "fullName avatar status",
+    );
   }
 
   return chat;
@@ -123,26 +128,29 @@ export const accessOrCreateChat = async (currentUserId: string, otherUserId: str
 export const createGroupChat = async (
   adminId: string,
   groupName: string,
-  memberIds: string[]
+  memberIds: string[],
 ) => {
   // لازم يكون فيه على الأقل عضوين غير الأدمن
   if (!memberIds || memberIds.length < 2) {
-    throw new AppError('Group chat must have at least 2 members besides admin', 400);
+    throw new AppError(
+      "Group chat must have at least 2 members besides admin",
+      400,
+    );
   }
 
   // الأدمن بيكون عضو تلقائياً
-  const allUsers = [adminId, ...memberIds.filter(id => id !== adminId)];
+  const allUsers = [adminId, ...memberIds.filter((id) => id !== adminId)];
 
   const groupChat = await Chat.create({
     isGroup: true,
     groupName,
     users: allUsers,
-    admins: [adminId]
+    admins: [adminId],
   });
 
   const populatedChat = await Chat.findById(groupChat._id)
-    .populate('users', 'fullName avatar status')
-    .populate('admins', 'fullName avatar');
+    .populate("users", "fullName avatar status")
+    .populate("admins", "fullName avatar");
 
   return populatedChat;
 };
@@ -150,25 +158,29 @@ export const createGroupChat = async (
 // ==========================================
 // ➕ إضافة عضو للجروب (Admin Only)
 // ==========================================
-export const addMemberToGroup = async (chatId: string, adminId: string, newMemberId: string) => {
+export const addMemberToGroup = async (
+  chatId: string,
+  adminId: string,
+  newMemberId: string,
+) => {
   const chat = await Chat.findById(chatId);
-  if (!chat) throw new AppError('Chat not found', 404);
-  if (!chat.isGroup) throw new AppError('This is not a group chat', 400);
+  if (!chat) throw new AppError("Chat not found", 404);
+  if (!chat.isGroup) throw new AppError("This is not a group chat", 400);
 
   // التأكد إن اللي بيضيف هو أدمن
-  const isAdmin = chat.admins?.some(id => id.toString() === adminId);
-  if (!isAdmin) throw new AppError('Only admins can add members', 403);
+  const isAdmin = chat.admins?.some((id) => id.toString() === adminId);
+  if (!isAdmin) throw new AppError("Only admins can add members", 403);
 
   // التأكد إن العضو مش موجود أصلاً
-  const alreadyMember = chat.users.some(id => id.toString() === newMemberId);
-  if (alreadyMember) throw new AppError('User is already a member', 400);
+  const alreadyMember = chat.users.some((id) => id.toString() === newMemberId);
+  if (alreadyMember) throw new AppError("User is already a member", 400);
 
   chat.users.push(new mongoose.Types.ObjectId(newMemberId));
   await chat.save();
 
   const updatedChat = await Chat.findById(chatId)
-    .populate('users', 'fullName avatar status')
-    .populate('admins', 'fullName avatar');
+    .populate("users", "fullName avatar status")
+    .populate("admins", "fullName avatar");
 
   return updatedChat;
 };
@@ -176,27 +188,35 @@ export const addMemberToGroup = async (chatId: string, adminId: string, newMembe
 // ==========================================
 // ➖ إزالة عضو من الجروب (Admin Only)
 // ==========================================
-export const removeMemberFromGroup = async (chatId: string, adminId: string, memberId: string) => {
+export const removeMemberFromGroup = async (
+  chatId: string,
+  adminId: string,
+  memberId: string,
+) => {
   const chat = await Chat.findById(chatId);
-  if (!chat) throw new AppError('Chat not found', 404);
-  if (!chat.isGroup) throw new AppError('This is not a group chat', 400);
+  if (!chat) throw new AppError("Chat not found", 404);
+  if (!chat.isGroup) throw new AppError("This is not a group chat", 400);
 
-  const isAdmin = chat.admins?.some(id => id.toString() === adminId);
-  if (!isAdmin) throw new AppError('Only admins can remove members', 403);
+  const isAdmin = chat.admins?.some((id) => id.toString() === adminId);
+  if (!isAdmin) throw new AppError("Only admins can remove members", 403);
 
   // مينفعش الأدمن يشيل نفسه (لازم يسيب الجروب بدل كده)
-  if (memberId === adminId) throw new AppError('Admin cannot remove themselves, use leave instead', 400);
+  if (memberId === adminId)
+    throw new AppError(
+      "Admin cannot remove themselves, use leave instead",
+      400,
+    );
 
-  chat.users = chat.users.filter(id => id.toString() !== memberId);
+  chat.users = chat.users.filter((id) => id.toString() !== memberId);
   // لو العضو كان أدمن كمان، نشيله من الأدمنز
   if (chat.admins) {
-    chat.admins = chat.admins.filter(id => id.toString() !== memberId);
+    chat.admins = chat.admins.filter((id) => id.toString() !== memberId);
   }
   await chat.save();
 
   const updatedChat = await Chat.findById(chatId)
-    .populate('users', 'fullName avatar status')
-    .populate('admins', 'fullName avatar');
+    .populate("users", "fullName avatar status")
+    .populate("admins", "fullName avatar");
 
   return updatedChat;
 };
@@ -206,16 +226,16 @@ export const removeMemberFromGroup = async (chatId: string, adminId: string, mem
 // ==========================================
 export const leaveGroup = async (chatId: string, userId: string) => {
   const chat = await Chat.findById(chatId);
-  if (!chat) throw new AppError('Chat not found', 404);
-  if (!chat.isGroup) throw new AppError('This is not a group chat', 400);
+  if (!chat) throw new AppError("Chat not found", 404);
+  if (!chat.isGroup) throw new AppError("This is not a group chat", 400);
 
-  const isMember = chat.users.some(id => id.toString() === userId);
-  if (!isMember) throw new AppError('You are not a member of this group', 400);
+  const isMember = chat.users.some((id) => id.toString() === userId);
+  if (!isMember) throw new AppError("You are not a member of this group", 400);
 
   // شيل اليوزر من الأعضاء والأدمنز
-  chat.users = chat.users.filter(id => id.toString() !== userId);
+  chat.users = chat.users.filter((id) => id.toString() !== userId);
   if (chat.admins) {
-    chat.admins = chat.admins.filter(id => id.toString() !== userId);
+    chat.admins = chat.admins.filter((id) => id.toString() !== userId);
   }
 
   // لو مفيش أدمنز تاني، أول عضو يبقى أدمن تلقائياً
@@ -224,7 +244,7 @@ export const leaveGroup = async (chatId: string, userId: string) => {
   }
 
   await chat.save();
-  return { message: 'You have left the group successfully' };
+  return { message: "You have left the group successfully" };
 };
 
 // ==========================================
@@ -234,30 +254,42 @@ export const createCommunity = async (
   ownerId: string,
   name: string,
   description: string,
-  tags?: string[]
+  category: string,
+  tags?: string[],
 ) => {
+  // 👈 1. التأكد إن مفيش مجتمع بنفس التخصص
+  const existingCategory = await Community.findOne({
+    category: category.toLowerCase(),
+  });
+  if (existingCategory) {
+    throw new AppError(
+      "A community for this category already exists. Please join it instead of creating a new one.",
+      400,
+    );
+  }
   // بننشئ شات جماعي مرتبط بالمجتمع تلقائياً
   const communityChat = await Chat.create({
     isGroup: true,
     groupName: name,
     users: [ownerId],
-    admins: [ownerId]
+    admins: [ownerId],
   });
 
   const community = await Community.create({
     name,
     description,
+    category: category.toLowerCase(), // 👈 2. ضفنا الـ category عشان يتحفظ في الداتا بيز
     owner: ownerId,
     admins: [ownerId],
     members: [ownerId],
     chatId: communityChat._id,
-    tags: tags || []
+    tags: tags || [],
   });
 
   const populatedCommunity = await Community.findById(community._id)
-    .populate('owner', 'fullName avatar')
-    .populate('members', 'fullName avatar')
-    .populate('chatId');
+    .populate("owner", "fullName avatar")
+    .populate("members", "fullName avatar")
+    .populate("chatId");
 
   return populatedCommunity;
 };
@@ -267,15 +299,20 @@ export const createCommunity = async (
 // ==========================================
 export const joinCommunity = async (communityId: string, userId: string) => {
   const community = await Community.findById(communityId);
-  if (!community) throw new AppError('Community not found', 404);
+  if (!community) throw new AppError("Community not found", 404);
 
   // التأكد إن اليوزر مش عضو أصلاً
-  const alreadyMember = community.members.some(id => id.toString() === userId);
-  if (alreadyMember) throw new AppError('You are already a member', 400);
+  const alreadyMember = community.members.some(
+    (id) => id.toString() === userId,
+  );
+  if (alreadyMember) throw new AppError("You are already a member", 400);
 
   // لو المجتمع خاص، مينفعش ينضم من غير دعوة
   if (!community.isPublic) {
-    throw new AppError('This is a private community, you need an invitation', 403);
+    throw new AppError(
+      "This is a private community, you need an invitation",
+      403,
+    );
   }
 
   // ضيف اليوزر كعضو في المجتمع وفي الشات المرتبط
@@ -285,11 +322,11 @@ export const joinCommunity = async (communityId: string, userId: string) => {
   // ضيفه في الشات الجماعي كمان
   if (community.chatId) {
     await Chat.findByIdAndUpdate(community.chatId, {
-      $addToSet: { users: userId }
+      $addToSet: { users: userId },
     });
   }
 
-  return { message: 'Joined community successfully' };
+  return { message: "Joined community successfully" };
 };
 
 // ==========================================
@@ -297,39 +334,50 @@ export const joinCommunity = async (communityId: string, userId: string) => {
 // ==========================================
 export const leaveCommunity = async (communityId: string, userId: string) => {
   const community = await Community.findById(communityId);
-  if (!community) throw new AppError('Community not found', 404);
+  if (!community) throw new AppError("Community not found", 404);
 
   // صاحب المجتمع مينفعش يغادر (لازم يمسح المجتمع أو ينقل الملكية)
   if (community.owner.toString() === userId) {
-    throw new AppError('Owner cannot leave the community, transfer ownership first', 400);
+    throw new AppError(
+      "Owner cannot leave the community, transfer ownership first",
+      400,
+    );
   }
 
-  community.members = community.members.filter(id => id.toString() !== userId);
-  community.admins = community.admins.filter(id => id.toString() !== userId);
+  community.members = community.members.filter(
+    (id) => id.toString() !== userId,
+  );
+  community.admins = community.admins.filter((id) => id.toString() !== userId);
   await community.save();
 
   // شيله من الشات كمان
   if (community.chatId) {
     await Chat.findByIdAndUpdate(community.chatId, {
-      $pull: { users: userId }
+      $pull: { users: userId },
     });
   }
 
-  return { message: 'Left community successfully' };
+  return { message: "Left community successfully" };
 };
 
 // ==========================================
 // ➕ إضافة عضو للمجتمع (Admin Only)
 // ==========================================
-export const addMemberToCommunity = async (communityId: string, adminId: string, newMemberId: string) => {
+export const addMemberToCommunity = async (
+  communityId: string,
+  adminId: string,
+  newMemberId: string,
+) => {
   const community = await Community.findById(communityId);
-  if (!community) throw new AppError('Community not found', 404);
+  if (!community) throw new AppError("Community not found", 404);
 
-  const isAdmin = community.admins.some(id => id.toString() === adminId);
-  if (!isAdmin) throw new AppError('Only admins can add members', 403);
+  const isAdmin = community.admins.some((id) => id.toString() === adminId);
+  if (!isAdmin) throw new AppError("Only admins can add members", 403);
 
-  const alreadyMember = community.members.some(id => id.toString() === newMemberId);
-  if (alreadyMember) throw new AppError('User is already a member', 400);
+  const alreadyMember = community.members.some(
+    (id) => id.toString() === newMemberId,
+  );
+  if (alreadyMember) throw new AppError("User is already a member", 400);
 
   community.members.push(new mongoose.Types.ObjectId(newMemberId));
   await community.save();
@@ -337,12 +385,14 @@ export const addMemberToCommunity = async (communityId: string, adminId: string,
   // ضيفه في الشات كمان
   if (community.chatId) {
     await Chat.findByIdAndUpdate(community.chatId, {
-      $addToSet: { users: newMemberId }
+      $addToSet: { users: newMemberId },
     });
   }
 
-  const updatedCommunity = await Community.findById(communityId)
-    .populate('members', 'fullName avatar');
+  const updatedCommunity = await Community.findById(communityId).populate(
+    "members",
+    "fullName avatar",
+  );
 
   return updatedCommunity;
 };
@@ -350,30 +400,40 @@ export const addMemberToCommunity = async (communityId: string, adminId: string,
 // ==========================================
 // ➖ إزالة عضو من المجتمع (Admin Only)
 // ==========================================
-export const removeMemberFromCommunity = async (communityId: string, adminId: string, memberId: string) => {
+export const removeMemberFromCommunity = async (
+  communityId: string,
+  adminId: string,
+  memberId: string,
+) => {
   const community = await Community.findById(communityId);
-  if (!community) throw new AppError('Community not found', 404);
+  if (!community) throw new AppError("Community not found", 404);
 
-  const isAdmin = community.admins.some(id => id.toString() === adminId);
-  if (!isAdmin) throw new AppError('Only admins can remove members', 403);
+  const isAdmin = community.admins.some((id) => id.toString() === adminId);
+  if (!isAdmin) throw new AppError("Only admins can remove members", 403);
 
   if (community.owner.toString() === memberId) {
-    throw new AppError('Cannot remove the community owner', 400);
+    throw new AppError("Cannot remove the community owner", 400);
   }
 
-  community.members = community.members.filter(id => id.toString() !== memberId);
-  community.admins = community.admins.filter(id => id.toString() !== memberId);
+  community.members = community.members.filter(
+    (id) => id.toString() !== memberId,
+  );
+  community.admins = community.admins.filter(
+    (id) => id.toString() !== memberId,
+  );
   await community.save();
 
   // شيله من الشات كمان
   if (community.chatId) {
     await Chat.findByIdAndUpdate(community.chatId, {
-      $pull: { users: memberId }
+      $pull: { users: memberId },
     });
   }
 
-  const updatedCommunity = await Community.findById(communityId)
-    .populate('members', 'fullName avatar');
+  const updatedCommunity = await Community.findById(communityId).populate(
+    "members",
+    "fullName avatar",
+  );
 
   return updatedCommunity;
 };
@@ -384,28 +444,40 @@ export const removeMemberFromCommunity = async (communityId: string, adminId: st
 export const updateCommunity = async (
   communityId: string,
   adminId: string,
-  updates: { name?: string; description?: string; avatar?: string; tags?: string[]; isPublic?: boolean }
+  updates: {
+    name?: string;
+    description?: string;
+    avatar?: string;
+    tags?: string[];
+    isPublic?: boolean;
+  },
 ) => {
   const community = await Community.findById(communityId);
-  if (!community) throw new AppError('Community not found', 404);
+  if (!community) throw new AppError("Community not found", 404);
 
-  const isAdmin = community.admins.some(id => id.toString() === adminId);
-  if (!isAdmin) throw new AppError('Only admins can update community', 403);
+  const isAdmin = community.admins.some((id) => id.toString() === adminId);
+  if (!isAdmin) throw new AppError("Only admins can update community", 403);
 
   // تحديث الحقول المسموح بيها بس
   const allowedUpdates: any = {};
   if (updates.name !== undefined) allowedUpdates.name = updates.name;
-  if (updates.description !== undefined) allowedUpdates.description = updates.description;
+  if (updates.description !== undefined)
+    allowedUpdates.description = updates.description;
   if (updates.avatar !== undefined) allowedUpdates.avatar = updates.avatar;
   if (updates.tags !== undefined) allowedUpdates.tags = updates.tags;
-  if (updates.isPublic !== undefined) allowedUpdates.isPublic = updates.isPublic;
+  if (updates.isPublic !== undefined)
+    allowedUpdates.isPublic = updates.isPublic;
 
-  const updatedCommunity = await Community.findByIdAndUpdate(communityId, allowedUpdates, {
-    new: true,
-    runValidators: true
-  })
-    .populate('owner', 'fullName avatar')
-    .populate('members', 'fullName avatar');
+  const updatedCommunity = await Community.findByIdAndUpdate(
+    communityId,
+    allowedUpdates,
+    {
+      new: true,
+      runValidators: true,
+    },
+  )
+    .populate("owner", "fullName avatar")
+    .populate("members", "fullName avatar");
 
   return updatedCommunity;
 };
@@ -413,15 +485,18 @@ export const updateCommunity = async (
 // ==========================================
 // 📋 جلب كل المجتمعات (مع pagination)
 // ==========================================
-export const getAllCommunities = async (page: number = 1, limit: number = 10) => {
+export const getAllCommunities = async (
+  page: number = 1,
+  limit: number = 10,
+) => {
   const skip = (page - 1) * limit;
 
   const communities = await Community.find({ isPublic: true })
-    .populate('owner', 'fullName avatar')
-    .select('name description avatar members tags createdAt')
+    .populate("owner", "fullName avatar")
+    .select("name description avatar members tags createdAt")
     .skip(skip)
     .limit(limit)
-    .sort('-createdAt');
+    .sort("-createdAt");
 
   const total = await Community.countDocuments({ isPublic: true });
 
@@ -430,8 +505,8 @@ export const getAllCommunities = async (page: number = 1, limit: number = 10) =>
     pagination: {
       currentPage: page,
       totalPages: Math.ceil(total / limit),
-      totalCommunities: total
-    }
+      totalCommunities: total,
+    },
   };
 };
 
@@ -440,12 +515,12 @@ export const getAllCommunities = async (page: number = 1, limit: number = 10) =>
 // ==========================================
 export const getCommunityById = async (communityId: string) => {
   const community = await Community.findById(communityId)
-    .populate('owner', 'fullName avatar')
-    .populate('admins', 'fullName avatar')
-    .populate('members', 'fullName avatar status')
-    .populate('chatId');
+    .populate("owner", "fullName avatar")
+    .populate("admins", "fullName avatar")
+    .populate("members", "fullName avatar status")
+    .populate("chatId");
 
-  if (!community) throw new AppError('Community not found', 404);
+  if (!community) throw new AppError("Community not found", 404);
 
   return community;
 };
@@ -455,10 +530,10 @@ export const getCommunityById = async (communityId: string) => {
 // ==========================================
 export const getUserChats = async (userId: string) => {
   const chats = await Chat.find({ users: userId })
-    .populate('users', 'fullName avatar status')
-    .populate('latestMessage')
-    .populate('admins', 'fullName avatar')
-    .sort('-updatedAt'); // أحدث محادثة نشطة فوق
+    .populate("users", "fullName avatar status")
+    .populate("latestMessage")
+    .populate("admins", "fullName avatar")
+    .sort("-updatedAt"); // أحدث محادثة نشطة فوق
 
   return chats;
 };
