@@ -1,52 +1,55 @@
 // hello test yassa
 
-import dotenv from 'dotenv';
+import dotenv from "dotenv";
 dotenv.config();
 
 console.log("👀 GOOGLE_CLIENT_ID IS:", process.env.GOOGLE_CLIENT_ID);
 console.log("👀 GOOGLE_CLIENT_SECRET IS:", process.env.GOOGLE_CLIENT_SECRET);
 
-import express, { Request, Response, NextFunction } from 'express';
-import mongoose from 'mongoose';
-import cors from 'cors';
-import rateLimit from 'express-rate-limit';
-import passport from 'passport';
-import './config/passport';
+import express, { Request, Response, NextFunction } from "express";
+import mongoose from "mongoose";
+import cors from "cors";
+import rateLimit from "express-rate-limit";
+import passport from "passport";
+import "./config/passport";
 
-import authRoutes from './routes/authRoutes'; 
-import apiRoutes from './routes'; 
-import { notFound, errorHandler } from './middlewares/errorHandler';
+import authRoutes from "./routes/authRoutes";
+import apiRoutes from "./routes";
+import { notFound, errorHandler } from "./middlewares/errorHandler";
 
-import http from 'http'; 
-import { Server } from 'socket.io'; 
-import jwt from 'jsonwebtoken';
-import Call from './models/Call'; 
-import { User } from './models/user';
-import * as chatService from './services/chat.service';
+import http from "http";
+import { Server } from "socket.io";
+import jwt from "jsonwebtoken";
+import Call from "./models/Call";
+import { User } from "./models/user";
+import * as chatService from "./services/chat.service";
+import Notification from "./models/Notification";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const BASE_URL = '/api/v1';
+const BASE_URL = "/api/v1";
 
 // ==========================================
 // 🛡️ الميدلويرز الأساسية (CORS & JSON) - مكانها الصح هنا
 // ==========================================
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true, 
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
-}));
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+  }),
+);
 app.use(express.json());
 
 // ==========================================
 // 🔌 تغليف السيرفر وتهيئة Socket.io (السنترال)
 // ==========================================
 const server = http.createServer(app);
-const io = new Server(server, {
+export const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE']
-  }
+    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    methods: ["GET", "POST", "PATCH", "PUT", "DELETE"],
+  },
 });
 
 export const userSocketMap = new Map<string, string>();
@@ -68,16 +71,19 @@ io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token || socket.handshake.query?.token;
 
     if (!token) {
-      return next(new Error('Authentication error: Token is required'));
+      return next(new Error("Authentication error: Token is required"));
     }
 
     // التحقق من صحة التوكن (نفس اللوجيك بتاع الـ API بالظبط)
-    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as jwt.JwtPayload;
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET as string,
+    ) as jwt.JwtPayload;
 
     // التأكد إن اليوزر لسه موجود في الداتا بيز
     const user = await User.findById(decoded.id);
     if (!user) {
-      return next(new Error('Authentication error: User not found'));
+      return next(new Error("Authentication error: User not found"));
     }
 
     // بنحفظ بيانات اليوزر على الـ socket عشان نستخدمها بعد كده في الـ events
@@ -86,13 +92,15 @@ io.use(async (socket, next) => {
 
     next();
   } catch (error) {
-    return next(new Error('Authentication error: Invalid token'));
+    return next(new Error("Authentication error: Invalid token"));
   }
 });
 
-io.on('connection', (socket) => {
+io.on("connection", (socket) => {
   const authenticatedUserId = (socket as any).userId;
-  console.log(`🟢 A new device connected to the switchboard, line number: ${socket.id}`);
+  console.log(
+    `🟢 A new device connected to the switchboard, line number: ${socket.id}`,
+  );
 
   // ==========================================
   // 📝 تسجيل اليوزر تلقائياً بعد المصادقة
@@ -101,13 +109,17 @@ io.on('connection', (socket) => {
   // بنسجله تلقائياً في الـ userSocketMap
   if (authenticatedUserId) {
     userSocketMap.set(authenticatedUserId, socket.id);
-    console.log(`✅ [Auto] The user [${authenticatedUserId}] registered via auth middleware on line [${socket.id}]`);
+    console.log(
+      `✅ [Auto] The user [${authenticatedUserId}] registered via auth middleware on line [${socket.id}]`,
+    );
   }
 
   // التسجيل اليدوي (للتوافق مع الكود القديم)
-  socket.on('register-user', (userId: string) => {
+  socket.on("register-user", (userId: string) => {
     userSocketMap.set(userId, socket.id);
-    console.log(`✅ The user [${userId}] Connected to the socket line [${socket.id}]`);
+    console.log(
+      `✅ The user [${userId}] Connected to the socket line [${socket.id}]`,
+    );
   });
 
   // ==========================================
@@ -123,115 +135,179 @@ io.on('connection', (socket) => {
   // - الأداء: emit واحد بدل N emits
   // - التنظيم: كل غرفة مسؤولة عن نفسها
   // - السهولة: مش محتاج نلف على كل الأعضاء ونبعت لكل واحد
-  socket.on('join-room', (roomId: string) => {
+  socket.on("join-room", (roomId: string) => {
     socket.join(roomId);
     console.log(`🏠 User [${authenticatedUserId}] joined room [${roomId}]`);
   });
 
   // مغادرة غرفة (لما اليوزر يقفل الشات)
-  socket.on('leave-room', (roomId: string) => {
+  socket.on("leave-room", (roomId: string) => {
     socket.leave(roomId);
     console.log(`🚪 User [${authenticatedUserId}] left room [${roomId}]`);
   });
 
   // ==========================================
-  // 💬 إرسال واستقبال الرسائل (Chat Events)
+  // 💬 إرسال واستقبال الرسائل + إشعارات المنشن (Chat & Mentions)
   // ==========================================
-  socket.on('send-message', async (data: { chatId: string, content: string, messageType?: string }) => {
-    try {
-      // حفظ الرسالة في الداتا بيز
-      const savedMessage = await chatService.createMessage({
-        chatId: data.chatId,
-        senderId: authenticatedUserId,
-        content: data.content,
-        messageType: data.messageType
-      });
+  socket.on(
+    "send-message",
+    async (data: {
+      chatId: string;
+      content: string;
+      messageType?: string;
+      mentions?: string[];
+    }) => {
+      try {
+        // 1. حفظ الرسالة الأساسية في الداتا بيز
+        const savedMessage = await chatService.createMessage({
+          chatId: data.chatId,
+          senderId: authenticatedUserId,
+          content: data.content,
+          messageType: data.messageType,
+        });
 
-      // بنبعت الرسالة لكل اللي في الـ room (الشات) - سواء فردي أو جماعي
-      // io.to(roomId) بتبعت لكل اللي في الغرفة (بما فيهم المرسل)
-      io.to(data.chatId).emit('receive-message', savedMessage);
+        //  تأكيد إن الرسالة موجودة قبل ما نكمل (لحل إيرور الـ null)
+        if (!savedMessage) return;
 
-      console.log(`💬 Message from [${authenticatedUserId}] in chat [${data.chatId}]`);
-    } catch (error: any) {
-      // لو حصل أي مشكلة (زي إن اليوزر مش عضو في الشات)، نبلغ المرسل بس
-      socket.emit('message-error', { message: error.message || 'Failed to send message' });
-      console.log("Error sending message:", error);
-    }
-  });
+        // 2. إرسال الرسالة لكل الموجودين في الشات
+        io.to(data.chatId).emit("receive-message", savedMessage);
+        console.log(
+          `💬 Message from [${authenticatedUserId}] in chat [${data.chatId}]`,
+        );
+        // 🔔 --- لوجيك إشعارات الـ Mentions --- 🔔
+        if (data.mentions && data.mentions.length > 0) {
+          // 1. التعديل الجراحي: هنجيب بس اليوزرز اللي مش قافلين إشعارات المنشن
+          const usersToMention = await User.find({
+            _id: { $in: data.mentions },
+            "notificationSettings.mentions": { $ne: false }, // الفلتر العبقري: هات اللي الإعداد عنده مش بـ false
+          }).select("_id");
+
+          const validMentions = usersToMention.map((u) => u._id.toString());
+
+          for (const mentionedUserId of validMentions) {
+            const newNotification = await Notification.create({
+              recipient: mentionedUserId,
+              sender: authenticatedUserId,
+              type: "mention",
+              title: "New Message 🔔",
+              content: "Someone mentioned you in a chat",
+              linkData: {
+                chatId: data.chatId,
+                messageId: savedMessage._id,
+              },
+            });
+
+            const targetSocketId = userSocketMap.get(mentionedUserId);
+            if (targetSocketId) {
+              io.to(targetSocketId).emit(
+                "receive-notification",
+                newNotification,
+              );
+            }
+          }
+        }
+      } catch (error: any) {
+        socket.emit("message-error", {
+          message: error.message || "Failed to send message",
+        });
+        console.log("Error sending message:", error);
+      }
+    },
+  );
 
   // ==========================================
   // ✍️ حالة الكتابة (Typing Indicator)
   // ==========================================
-  socket.on('typing', (data: { chatId: string }) => {
+  socket.on("typing", (data: { chatId: string }) => {
     // بنبعت لكل اللي في الغرفة ماعدا المرسل (عشان مش هيعرض لنفسه إنه بيكتب)
-    socket.to(data.chatId).emit('user-typing', {
+    socket.to(data.chatId).emit("user-typing", {
       userId: authenticatedUserId,
-      chatId: data.chatId
+      chatId: data.chatId,
     });
   });
 
-  socket.on('stop-typing', (data: { chatId: string }) => {
-    socket.to(data.chatId).emit('user-stop-typing', {
+  socket.on("stop-typing", (data: { chatId: string }) => {
+    socket.to(data.chatId).emit("user-stop-typing", {
       userId: authenticatedUserId,
-      chatId: data.chatId
+      chatId: data.chatId,
     });
   });
 
   // ==========================================
   // 📞 أحداث المكالمات (Call Events) - موجودة من قبل
   // ==========================================
-  socket.on('call-user', async (data: { userToCall: string, signalData: any, from: string, callerName: string }) => {
-    console.log("🚨 The server received an event call-user Successfully! And the data is:", data);
-    try {
-      const newCall = await Call.create({
-        caller: data.from,      
-        receiver: data.userToCall, 
-        type: 'video',
-        status: 'missed' 
-      });
-
-      const receiverSocketId = userSocketMap.get(data.userToCall);
-      
-      if (receiverSocketId) {
-        io.to(receiverSocketId).emit('incoming-call', {
-          signal: data.signalData,
-          from: data.from,
-          callerName: data.callerName,
-          callId: newCall._id 
+  socket.on(
+    "call-user",
+    async (data: {
+      userToCall: string;
+      signalData: any;
+      from: string;
+      callerName: string;
+    }) => {
+      console.log(
+        "🚨 The server received an event call-user Successfully! And the data is:",
+        data,
+      );
+      try {
+        const newCall = await Call.create({
+          caller: data.from,
+          receiver: data.userToCall,
+          type: "video",
+          status: "missed",
         });
-        console.log(`📞 A ringtone from [${data.from}] to [${data.userToCall}] - Registered`);
-      } else {
-        socket.emit('user-offline', { message: 'The user is currently offline' });
-      }
-    } catch (error) {
-      console.log("Error saving call:", error);
-    }
-  });
 
-  socket.on('answer-call', async (data: { to: string, signal: any, callId: string }) => {
-    try {
-      if (data.callId) {
-        await Call.findByIdAndUpdate(data.callId, { status: 'accepted' });
-      }
-      const callerSocketId = userSocketMap.get(data.to);
-      if (callerSocketId) {
-        io.to(callerSocketId).emit('call-accepted', data.signal);
-        console.log(`✅ The call was opened with [${data.to}] - The status has been updated`);
-      }
-    } catch (error) {
-      console.log("Error updating call:", error);
-    }
-  });
+        const receiverSocketId = userSocketMap.get(data.userToCall);
 
-  socket.on('end-call', (data: { to: string }) => {
+        if (receiverSocketId) {
+          io.to(receiverSocketId).emit("incoming-call", {
+            signal: data.signalData,
+            from: data.from,
+            callerName: data.callerName,
+            callId: newCall._id,
+          });
+          console.log(
+            `📞 A ringtone from [${data.from}] to [${data.userToCall}] - Registered`,
+          );
+        } else {
+          socket.emit("user-offline", {
+            message: "The user is currently offline",
+          });
+        }
+      } catch (error) {
+        console.log("Error saving call:", error);
+      }
+    },
+  );
+
+  socket.on(
+    "answer-call",
+    async (data: { to: string; signal: any; callId: string }) => {
+      try {
+        if (data.callId) {
+          await Call.findByIdAndUpdate(data.callId, { status: "accepted" });
+        }
+        const callerSocketId = userSocketMap.get(data.to);
+        if (callerSocketId) {
+          io.to(callerSocketId).emit("call-accepted", data.signal);
+          console.log(
+            `✅ The call was opened with [${data.to}] - The status has been updated`,
+          );
+        }
+      } catch (error) {
+        console.log("Error updating call:", error);
+      }
+    },
+  );
+
+  socket.on("end-call", (data: { to: string }) => {
     const receiverSocketId = userSocketMap.get(data.to);
     if (receiverSocketId) {
-      io.to(receiverSocketId).emit('call-ended');
+      io.to(receiverSocketId).emit("call-ended");
       console.log(`🚫 Line lock device: [${data.to}]`);
     }
   });
 
-  socket.on('disconnect', () => {
+  socket.on("disconnect", () => {
     console.log(`🔴 Line disconnected: ${socket.id}`);
     for (let [userId, socketId] of userSocketMap.entries()) {
       if (socketId === socket.id) {
@@ -246,17 +322,18 @@ io.on('connection', (socket) => {
 // 🛡️ إعدادات الحماية (Rate Limiting)
 // ==========================================
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, 
-  max: 100, 
-  message: { 
-    status: 'error',
-    message: "The allowed request limit has been exceeded, please try again after 15 minutes." 
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: {
+    status: "error",
+    message:
+      "The allowed request limit has been exceeded, please try again after 15 minutes.",
   },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-app.use(BASE_URL, apiLimiter); 
+app.use(BASE_URL, apiLimiter);
 
 // ==========================================
 // 🔑 تهيئة المصادقة عبر Passport
@@ -266,18 +343,19 @@ app.use(passport.initialize());
 // ==========================================
 // 🗄️ الاتصال بقاعدة البيانات
 // ==========================================
-mongoose.connect(process.env.MONGO_URI as string)
-  .then(() => { 
-    console.log('✅ MongoDB Connected');
-    console.log('📂 Writing to Database:', mongoose.connection.name);
+mongoose
+  .connect(process.env.MONGO_URI as string)
+  .then(() => {
+    console.log("✅ MongoDB Connected");
+    console.log("📂 Writing to Database:", mongoose.connection.name);
   })
-  .catch(err => console.log('❌ Database Connection Error:', err));
+  .catch((err) => console.log("❌ Database Connection Error:", err));
 
 // ==========================================
 // 🚀 ربط المسارات بالسيرفر
 // ==========================================
-app.get('/test', (req: Request, res: Response) => {
-  res.send('Server is running');
+app.get("/test", (req: Request, res: Response) => {
+  res.send("Server is running");
 });
 
 app.use(`${BASE_URL}/auth`, authRoutes);

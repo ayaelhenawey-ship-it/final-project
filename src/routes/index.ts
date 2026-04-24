@@ -18,6 +18,7 @@ import {
   getUserProfile,
   deleteMyAccount,
   searchUsers,
+  updateNotificationSettings,
 } from "../controllers/profile.controller";
 
 import { uploadAvatar } from "../middlewares/upload.middleware";
@@ -27,12 +28,14 @@ import { restrictTo } from "../middlewares/authorize.middleware";
 import callRoutes from "./callRoutes";
 import chatRoutes from "./chatRoutes";
 import jobRoutes from "./job.routes";
+import notificationRoutes from "./notification.routes";
 
 // إنشاء الـ Router
 const router = Router();
 router.use("/calls", callRoutes);
 router.use("/chats", chatRoutes);
 router.use("/jobs", jobRoutes);
+router.use("/notifications", notificationRoutes);
 
 // ==========================================
 // 🚀 المسارات (Routes)
@@ -173,4 +176,5 @@ router.patch(
   uploadAvatar.single("avatar"),
   uploadProfileAvatar,
 );
+router.patch("/profile/me/notifications", protect, updateNotificationSettings);
 export default router;
