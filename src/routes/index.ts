@@ -18,6 +18,7 @@ import {
   getUserProfile,
   deleteMyAccount,
   searchUsers,
+  updateNotificationSettings,
 } from "../controllers/profile.controller";
 
 import { uploadAvatar } from "../middlewares/upload.middleware";
@@ -175,4 +176,5 @@ router.patch(
   uploadAvatar.single("avatar"),
   uploadProfileAvatar,
 );
+router.patch("/profile/me/notifications", protect, updateNotificationSettings);
 export default router;

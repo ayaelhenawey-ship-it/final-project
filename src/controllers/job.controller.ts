@@ -5,6 +5,8 @@ import { AppError } from "../utils/AppError";
 import Community from "../models/Community";
 import Notification from "../models/Notification";
 import { io, userSocketMap } from "../server";
+import { User } from "../models/user";
+
 // 1. إنشاء وظيفة
 // 1. إنشاء وظيفة (إجباري داخل مجتمع) + إشعارات الأعضاء
 export const createJob = catchAsync(
@@ -26,37 +28,43 @@ export const createJob = catchAsync(
     // 3. حفظ الوظيفة
     const newJob = new Job({ ...req.body, publisherId });
     await newJob.save();
-
     // 🔔 4. لوجيك إشعارات أعضاء الكوميونتي (Trigger)
     if (community.members && community.members.length > 0) {
-      // استبعاد صاحب الوظيفة
-      const targetMembers = community.members.filter(
+      // أ. استبعاد صاحب الوظيفة
+      const membersIds = community.members.filter(
         (memberId) => memberId.toString() !== publisherId.toString(),
       );
 
-      if (targetMembers.length > 0) {
-        // تجهيز الإشعارات
-        const notificationsToInsert = targetMembers.map((memberId) => ({
-          recipient: memberId,
-          sender: publisherId,
-          type: "job_alert",
-          title: "New Job in Community 🚀",
-          content: `A new job opportunity: "${newJob.title}" has been posted in your group.`,
-          linkData: { jobId: newJob._id, chatId: communityId },
-        }));
+      if (membersIds.length > 0) {
+        // ب. التعديل الجراحي: فلترة الأعضاء اللي قافلين إشعارات الوظائف (jobAlerts)
+        const targetUsers = await User.find({
+          _id: { $in: membersIds },
+          "notificationSettings.jobAlerts": { $ne: false }, // هات اللي مش قافلها
+        }).select("_id");
 
-        // حفظ bulk في الداتا بيز
-        const savedNotifications = await Notification.insertMany(
-          notificationsToInsert,
-        );
+        if (targetUsers.length > 0) {
+          const notificationsToInsert = targetUsers.map((user) => ({
+            recipient: user._id,
+            sender: publisherId,
+            type: "job_alert",
+            title: "New Job in Community 🚀",
+            content: `A new job opportunity: "${newJob.title}" has been posted in your group.`,
+            linkData: { jobId: newJob._id, chatId: communityId },
+          }));
 
-        // إرسال Socket لحظي للأونلاين
-        savedNotifications.forEach((notification) => {
-          const socketId = userSocketMap.get(notification.recipient.toString());
-          if (socketId) {
-            io.to(socketId).emit("receive-notification", notification);
-          }
-        });
+          const savedNotifications = await Notification.insertMany(
+            notificationsToInsert,
+          );
+
+          savedNotifications.forEach((notification) => {
+            const socketId = userSocketMap.get(
+              notification.recipient.toString(),
+            );
+            if (socketId) {
+              io.to(socketId).emit("receive-notification", notification);
+            }
+          });
+        }
       }
     }
 

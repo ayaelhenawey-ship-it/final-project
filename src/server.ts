@@ -166,7 +166,7 @@ io.on("connection", (socket) => {
           messageType: data.messageType,
         });
 
-        // 🛑 تأكيد إن الرسالة موجودة قبل ما نكمل (لحل إيرور الـ null)
+        //  تأكيد إن الرسالة موجودة قبل ما نكمل (لحل إيرور الـ null)
         if (!savedMessage) return;
 
         // 2. إرسال الرسالة لكل الموجودين في الشات
@@ -174,11 +174,17 @@ io.on("connection", (socket) => {
         console.log(
           `💬 Message from [${authenticatedUserId}] in chat [${data.chatId}]`,
         );
-
         // 🔔 --- لوجيك إشعارات الـ Mentions --- 🔔
         if (data.mentions && data.mentions.length > 0) {
-          for (const mentionedUserId of data.mentions) {
-            // أ. حفظ الإشعار في الداتا بيز (عشان لو اليوزر أوفلاين)
+          // 1. التعديل الجراحي: هنجيب بس اليوزرز اللي مش قافلين إشعارات المنشن
+          const usersToMention = await User.find({
+            _id: { $in: data.mentions },
+            "notificationSettings.mentions": { $ne: false }, // الفلتر العبقري: هات اللي الإعداد عنده مش بـ false
+          }).select("_id");
+
+          const validMentions = usersToMention.map((u) => u._id.toString());
+
+          for (const mentionedUserId of validMentions) {
             const newNotification = await Notification.create({
               recipient: mentionedUserId,
               sender: authenticatedUserId,
@@ -191,17 +197,11 @@ io.on("connection", (socket) => {
               },
             });
 
-            // ب. البحث عن اليوزر في قائمة المتصلين حالياً
             const targetSocketId = userSocketMap.get(mentionedUserId);
-
-            // ج. لو متصل (أونلاين)، ابعتله الإشعار لحظياً
             if (targetSocketId) {
               io.to(targetSocketId).emit(
                 "receive-notification",
                 newNotification,
-              );
-              console.log(
-                `🔔 Mention notification sent to user [${mentionedUserId}] on socket [${targetSocketId}]`,
               );
             }
           }
