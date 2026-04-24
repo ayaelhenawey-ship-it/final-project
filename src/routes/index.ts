@@ -27,12 +27,14 @@ import { restrictTo } from "../middlewares/authorize.middleware";
 import callRoutes from "./callRoutes";
 import chatRoutes from "./chatRoutes";
 import jobRoutes from "./job.routes";
+import notificationRoutes from "./notification.routes";
 
 // إنشاء الـ Router
 const router = Router();
 router.use("/calls", callRoutes);
 router.use("/chats", chatRoutes);
 router.use("/jobs", jobRoutes);
+router.use("/notifications", notificationRoutes);
 
 // ==========================================
 // 🚀 المسارات (Routes)
