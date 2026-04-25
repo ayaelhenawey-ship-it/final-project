@@ -6,8 +6,8 @@ import Community from "../models/Community";
 import Notification from "../models/Notification";
 import { io, userSocketMap } from "../server";
 import { User } from "../models/user";
+import { ApiFeatures } from "../utils/ApiFeatures"; // تم إضافة الاستيراد هنا
 
-// 1. إنشاء وظيفة
 // 1. إنشاء وظيفة (إجباري داخل مجتمع) + إشعارات الأعضاء
 export const createJob = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
@@ -114,14 +114,30 @@ export const getJobApplicants = catchAsync(
   },
 );
 
-// 4. جلب كل الوظائف
+// 4. جلب كل الوظائف (تم التعديل لإضافة الفلترة الذكية)
 export const getAllJobs = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
-    const jobs = await Job.find().populate(
+    // بناء الاستعلام المبدئي مع الـ populate
+    const initialQuery = Job.find().populate(
       "publisherId",
-      "fullName email status",
+      "fullName email status"
     );
-    res.status(200).json(jobs);
+
+    // استخدام ApiFeatures وتمرير الـ query بتاع الـ Request
+    const features = new ApiFeatures(initialQuery, req.query)
+      .filter() 
+      .search(["title", "description", "requirements"]) // الحقول اللي هيتم البحث جواها بكلمة مفتاحية
+      .sort()
+      .paginate();
+
+    // تنفيذ الاستعلام النهائي
+    const jobs = await features.mongooseQuery;
+
+    res.status(200).json({
+      status: "success",
+      results: jobs.length,
+      data: jobs
+    });
   },
 );
 
